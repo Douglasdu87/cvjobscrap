@@ -1,0 +1,1812 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useAppStore, type View, type Profile, type Skill, type Language, SUBSCRIPTION_PLANS, CV_TEMPLATES, CV_COLORS } from '@/lib/store';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { 
+  FileText, Search, Briefcase, Home, User, Plus, Trash2, 
+  Download, Send, Eye, CheckCircle, XCircle, Clock, TrendingUp,
+  Building2, MapPin, Calendar, DollarSign, Sparkles, Zap,
+  Target, BarChart3, Settings, Bell, Star, Globe,
+  Award, BookOpen, Languages, Wrench,
+  Menu, X, ArrowRight, Check, RefreshCw, CreditCard,
+  Crown, Rocket, Shield, Palette, Layout, Paintbrush,
+  Upload, FileUp, Play, Pause, Filter, Wand2
+} from 'lucide-react';
+import Image from 'next/image';
+import { toast } from '@/hooks/use-toast';
+
+// ============================================
+// PAYMENT DIALOG COMPONENT (defined first to avoid hoisting issues)
+// ============================================
+function PaymentDialog({ plan, children }: { plan: typeof SUBSCRIPTION_PLANS[0]; children: React.ReactNode }) {
+  const { upgradePlan, setCurrentView, profile, setProfile } = useAppStore();
+  const [open, setOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+
+  const handleSubscribe = async () => {
+    if (plan.id === 'starter') {
+      upgradePlan('starter');
+      setOpen(false);
+      setCurrentView('cv-builder');
+      toast({ title: 'Bienvenue !', description: 'Votre compte Starter est activé.' });
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    // Show toast immediately to indicate processing
+    toast({ title: 'Connexion à Stripe...', description: 'Veuillez patienter quelques secondes.' });
+    
+    try {
+      // Call Stripe checkout API
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: plan.id,
+          billingCycle,
+          email: profile.email || 'user@example.com',
+          name: `${profile.firstName} ${profile.lastName}`.trim() || 'User',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.url) {
+        // Redirect to Stripe Checkout in the same window
+        toast({ title: 'Redirection vers Stripe...', description: 'Vous allez être redirigé vers la page de paiement.' });
+        window.location.href = data.url;
+        return;
+      }
+
+      if (data.success) {
+        // Free plan or direct activation
+        upgradePlan(plan.id);
+        setOpen(false);
+        setCurrentView('cv-builder');
+        if (data.demo) {
+          toast({ 
+            title: 'Mode Démo', 
+            description: `${plan.name} activé. Configurez Stripe dans .env pour les vrais paiements.` 
+          });
+        } else {
+          toast({ title: 'Abonnement activé !', description: `Votre plan ${plan.name} est maintenant actif.` });
+        }
+        return;
+      }
+
+      throw new Error(data.error || 'Erreur lors du paiement');
+
+    } catch (error: any) {
+      // Fallback to simulated payment for demo
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      upgradePlan(plan.id);
+      setOpen(false);
+      setCurrentView('cv-builder');
+      toast({ 
+        title: 'Paiement simulé', 
+        description: `Mode démo: Abonnement ${plan.name} activé. Configurez Stripe pour les vrais paiements.` 
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const finalPrice = billingCycle === 'yearly' ? plan.priceYearly / 12 : plan.price;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {plan.id === 'starter' && <Sparkles className="h-5 w-5" />}
+            {plan.id === 'pro' && <Crown className="h-5 w-5" />}
+            {plan.id === 'elite' && <Rocket className="h-5 w-5" />}
+            {plan.name}
+          </DialogTitle>
+          <DialogDescription>{plan.description}</DialogDescription>
+        </DialogHeader>
+        
+        {plan.price > 0 && (
+          <div className="space-y-4">
+            <div className="flex rounded-lg border p-1">
+              <Button variant={billingCycle === 'monthly' ? 'default' : 'ghost'} size="sm" className="flex-1" onClick={() => setBillingCycle('monthly')}>Mensuel</Button>
+              <Button variant={billingCycle === 'yearly' ? 'default' : 'ghost'} size="sm" className="flex-1" onClick={() => setBillingCycle('yearly')}>Annuel (-20%)</Button>
+            </div>
+            <div className="bg-muted rounded-lg p-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">{plan.name}</span>
+                <span className="font-bold">{finalPrice.toFixed(2)}€/mois</span>
+              </div>
+              {billingCycle === 'yearly' && <div className="text-sm text-accent mt-1">Économisez {((plan.price * 12) - plan.priceYearly).toFixed(2)}€/an</div>}
+            </div>
+          </div>
+        )}
+
+        <ul className="space-y-2">
+          {plan.features.slice(0, 5).map((feature, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm">
+              <Check className="h-4 w-4 text-accent shrink-0 mt-0.5" />
+              <span>{feature}</span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="flex gap-2 pt-4">
+          <Button variant="outline" className="flex-1" onClick={() => setOpen(false)}>Annuler</Button>
+          <Button className="flex-1 gradient-primary text-white" onClick={handleSubscribe} disabled={isProcessing}>
+            {isProcessing ? <><RefreshCw className="h-4 w-4 animate-spin mr-2" />Traitement...</> : plan.price === 0 ? 'Activer gratuitement' : <><CreditCard className="h-4 w-4 mr-2" />Payer {billingCycle === 'yearly' ? plan.priceYearly : plan.price}€</>}
+          </Button>
+        </div>
+        
+        {plan.price > 0 && (
+          <div className="flex items-center justify-center gap-2 pt-3 text-xs text-muted-foreground">
+            <Shield className="h-3 w-3" />
+            <span>Paiement sécurisé par Stripe</span>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================
+// MAIN APP COMPONENT
+// ============================================
+export default function App() {
+  const { currentView, setCurrentView } = useAppStore();
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <Header />
+      <main className="flex-1">
+        {currentView === 'home' && <HomePage />}
+        {currentView === 'cv-builder' && <CVBuilderPage />}
+        {currentView === 'job-search' && <JobSearchPage />}
+        {currentView === 'dashboard' && <DashboardPage />}
+        {currentView === 'pricing' && <PricingPage />}
+        {currentView === 'auto-apply' && <AutoApplyPage />}
+        {currentView === 'import-cv' && <ImportCVPage />}
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+// ============================================
+// HEADER COMPONENT
+// ============================================
+function Header() {
+  const { currentView, setCurrentView, subscription, getRemainingApplications } = useAppStore();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const remaining = getRemainingApplications();
+
+  const navItems: { id: View; label: string; icon: React.ReactNode }[] = [
+    { id: 'home', label: 'Accueil', icon: <Home className="h-4 w-4" /> },
+    { id: 'cv-builder', label: 'Créer CV', icon: <FileText className="h-4 w-4" /> },
+    { id: 'import-cv', label: 'Importer', icon: <Upload className="h-4 w-4" /> },
+    { id: 'job-search', label: 'Emplois', icon: <Search className="h-4 w-4" /> },
+    { id: 'auto-apply', label: 'Auto-Apply', icon: <Zap className="h-4 w-4" /> },
+    { id: 'pricing', label: 'Tarifs', icon: <CreditCard className="h-4 w-4" /> },
+    { id: 'dashboard', label: 'Tableau de bord', icon: <BarChart3 className="h-4 w-4" /> },
+  ];
+
+  return (
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setCurrentView('home')}>
+          <Image src="/logo.png" alt="CVJobScrap" width={40} height={40} className="h-10 w-auto" />
+          <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">CVJobScrap</span>
+        </div>
+
+        <nav className="hidden md:flex items-center gap-1">
+          {navItems.map((item) => (
+            <Button key={item.id} variant={currentView === item.id ? 'default' : 'ghost'} size="sm" onClick={() => setCurrentView(item.id)} className="gap-2">
+              {item.icon}{item.label}
+            </Button>
+          ))}
+        </nav>
+
+        <div className="hidden md:flex items-center gap-3">
+          {subscription && subscription.plan !== 'starter' && (
+            <Badge variant="secondary" className="gap-1">
+              <Crown className="h-3 w-3" /> {subscription.plan.toUpperCase()}
+              {remaining >= 0 && <span className="ml-1">• {remaining} candidatures</span>}
+            </Badge>
+          )}
+          <Button variant="ghost" size="sm"><Bell className="h-4 w-4" /></Button>
+          <Button size="sm" className="gradient-primary text-white gap-2"><User className="h-4 w-4" />Compte</Button>
+        </div>
+
+        <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </Button>
+      </div>
+
+      {mobileMenuOpen && (
+        <div className="md:hidden border-t bg-background">
+          <nav className="container mx-auto px-4 py-2 flex flex-col gap-1">
+            {navItems.map((item) => (
+              <Button key={item.id} variant={currentView === item.id ? 'default' : 'ghost'} size="sm" onClick={() => { setCurrentView(item.id); setMobileMenuOpen(false); }} className="gap-2 justify-start">
+                {item.icon}{item.label}
+              </Button>
+            ))}
+          </nav>
+        </div>
+      )}
+    </header>
+  );
+}
+
+// ============================================
+// HOME PAGE
+// ============================================
+function HomePage() {
+  const { setCurrentView } = useAppStore();
+
+  const features = [
+    { icon: <Sparkles className="h-6 w-6" />, title: 'CV Optimisé ATS', description: 'Passez les filtres automatiques des recruteurs.' },
+    { icon: <Search className="h-6 w-6" />, title: 'Recherche Intelligente', description: 'Trouvez les meilleures opportunités avec l\'IA.' },
+    { icon: <Send className="h-6 w-6" />, title: 'Candidature Automatisée', description: 'Lettres personnalisées générées par IA.' },
+    { icon: <BarChart3 className="h-6 w-6" />, title: 'Suivi en Temps Réel', description: 'Visualisez vos statistiques et progressez.' },
+  ];
+
+  const stats = [
+    { value: '15,000+', label: 'CV générés' },
+    { value: '98%', label: 'Satisfaction' },
+    { value: '50,000+', label: 'Candidatures' },
+    { value: '3x', label: 'Plus de réponses' },
+  ];
+
+  return (
+    <div className="flex flex-col">
+      {/* Hero */}
+      <section className="gradient-hero py-20 px-4">
+        <div className="container mx-auto max-w-6xl">
+          <div className="flex flex-col lg:flex-row items-center gap-12">
+            <div className="flex-1 text-center lg:text-left">
+              <Badge variant="secondary" className="mb-4 px-4 py-1"><Zap className="h-3 w-3 mr-1" /> Propulsé par l'IA</Badge>
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+                Votre carrière, <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">optimisée par l'IA</span>
+              </h1>
+              <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-xl">
+                Générez des CV professionnels, trouvez les meilleures opportunités et automatisez vos candidatures.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                <Button size="lg" className="gradient-primary text-white gap-2 h-12 px-8" onClick={() => setCurrentView('cv-builder')}>
+                  <Sparkles className="h-5 w-5" />Créer mon CV gratuit
+                </Button>
+                <Button size="lg" variant="outline" className="gap-2 h-12 px-8" onClick={() => setCurrentView('pricing')}>
+                  <CreditCard className="h-5 w-5" />Voir les tarifs
+                </Button>
+              </div>
+            </div>
+            <div className="flex-1 relative">
+              <div className="relative animate-float">
+                <div className="bg-card rounded-2xl shadow-2xl p-6 border">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center"><FileText className="h-6 w-6 text-primary" /></div>
+                    <div><div className="font-semibold">CV Généré</div><div className="text-sm text-muted-foreground">Optimisé ATS</div></div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3 bg-primary/20 rounded w-full" />
+                    <div className="h-3 bg-muted rounded w-4/5" />
+                    <div className="h-3 bg-muted rounded w-3/5" />
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <Badge variant="secondary">React</Badge>
+                    <Badge variant="secondary">TypeScript</Badge>
+                    <Badge variant="secondary">Node.js</Badge>
+                  </div>
+                  <div className="mt-4 flex items-center gap-2 text-accent"><CheckCircle className="h-4 w-4" /><span className="text-sm font-medium">Score: 95/100</span></div>
+                </div>
+                <div className="absolute -bottom-4 -right-4 bg-accent text-accent-foreground rounded-xl p-4 shadow-lg">
+                  <div className="flex items-center gap-2"><Send className="h-5 w-5" /><span className="font-medium">Candidature envoyée!</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats */}
+      <section className="py-12 bg-card border-y">
+        <div className="container mx-auto max-w-6xl px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            {stats.map((stat, i) => (
+              <div key={i} className="text-center">
+                <div className="text-3xl md:text-4xl font-bold text-primary mb-1">{stat.value}</div>
+                <div className="text-muted-foreground">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="py-20 px-4">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Tout ce dont vous avez besoin</h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">Notre plateforme combine les dernières technologies d'IA.</p>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((f, i) => (
+              <Card key={i} className="group hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">{f.icon}</div>
+                  <CardTitle className="text-lg">{f.title}</CardTitle>
+                </CardHeader>
+                <CardContent><CardDescription>{f.description}</CardDescription></CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="py-20 px-4 bg-muted/30">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Comment ça marche ?</h2>
+            <p className="text-lg text-muted-foreground">Trois étapes simples</p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              { step: '01', title: 'Créez votre profil', desc: 'Remplissez vos informations.' },
+              { step: '02', title: 'Générez votre CV', desc: 'CV optimisé ATS automatique.' },
+              { step: '03', title: 'Postulez', desc: 'Candidatures automatiques personnalisées.' },
+            ].map((item, i) => (
+              <div key={i} className="relative">
+                <div className="text-6xl font-bold text-primary/10 absolute -top-4 left-0">{item.step}</div>
+                <div className="relative z-10 pt-8">
+                  <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
+                  <p className="text-muted-foreground">{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-20 px-4">
+        <div className="container mx-auto max-w-4xl">
+          <Card className="gradient-primary text-white overflow-hidden relative">
+            <CardContent className="p-12 text-center relative z-10">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">Prêt à décrocher l'emploi de vos rêves ?</h2>
+              <p className="text-lg opacity-90 mb-8 max-w-xl mx-auto">Rejoignez des milliers de professionnels.</p>
+              <Button size="lg" variant="secondary" className="gap-2 h-12 px-8" onClick={() => setCurrentView('cv-builder')}>
+                Commencer gratuitement<ArrowRight className="h-5 w-5" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ============================================
+// PRICING PAGE
+// ============================================
+function PricingPage() {
+  const { setCurrentView, subscription } = useAppStore();
+
+  return (
+    <div className="py-20 px-4">
+      <div className="container mx-auto max-w-6xl">
+        <div className="text-center mb-16">
+          <Badge variant="secondary" className="mb-4"><CreditCard className="h-3 w-3 mr-1" /> Tarifs</Badge>
+          <h1 className="text-4xl md:text-5xl font-bold mb-4">Choisissez votre plan</h1>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            Commencez gratuitement, évoluez selon vos besoins. Paiement sécurisé via Stripe.
+          </p>
+        </div>
+
+        {subscription && (
+          <Card className="max-w-md mx-auto mb-12 border-accent">
+            <CardContent className="p-6 text-center">
+              <Crown className="h-8 w-8 mx-auto mb-2 text-accent" />
+              <p className="font-semibold">Plan actuel: {subscription.plan.toUpperCase()}</p>
+              <p className="text-sm text-muted-foreground">Renouvellement: {new Date(subscription.currentPeriodEnd).toLocaleDateString('fr-FR')}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          {SUBSCRIPTION_PLANS.map((plan) => (
+            <Card key={plan.id} className={`relative ${plan.popular ? 'border-primary shadow-lg scale-105' : ''}`}>
+              {plan.popular && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge className="gradient-primary text-white"><Star className="h-3 w-3 mr-1" /> Populaire</Badge>
+                </div>
+              )}
+              <CardHeader className="text-center pb-2">
+                <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  {plan.id === 'starter' && <Sparkles className="h-6 w-6 text-primary" />}
+                  {plan.id === 'pro' && <Crown className="h-6 w-6 text-primary" />}
+                  {plan.id === 'elite' && <Rocket className="h-6 w-6 text-primary" />}
+                </div>
+                <CardTitle className="text-xl">{plan.name}</CardTitle>
+                <CardDescription>{plan.description}</CardDescription>
+                <div className="mt-4">
+                  <span className="text-4xl font-bold">{plan.price === 0 ? 'Gratuit' : `${plan.price}€`}</span>
+                  {plan.price > 0 && <span className="text-muted-foreground">/mois</span>}
+                </div>
+                {plan.price > 0 && <p className="text-sm text-muted-foreground">ou {plan.priceYearly}€/an (-20%)</p>}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <ul className="space-y-3">
+                  {plan.features.map((feature, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <Check className="h-4 w-4 text-accent shrink-0 mt-0.5" /><span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                {subscription?.plan === plan.id ? (
+                  <Button className="w-full mt-4" variant="outline" disabled>Plan actuel</Button>
+                ) : (
+                  <PaymentDialog plan={plan}>
+                    <Button className={`w-full mt-4 ${plan.popular ? 'gradient-primary text-white' : ''}`} variant={plan.id === 'starter' ? 'outline' : 'default'}>
+                      {plan.id === 'starter' ? 'Commencer gratuitement' : `Choisir ${plan.name}`}
+                    </Button>
+                  </PaymentDialog>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="text-center mt-12">
+          <Button variant="outline" onClick={() => setCurrentView('home')}>← Retour à l'accueil</Button>
+        </div>
+
+        <div className="mt-16 max-w-3xl mx-auto">
+          <h3 className="text-2xl font-bold mb-6 text-center">Questions fréquentes</h3>
+          <div className="space-y-4">
+            {[
+              { q: 'Puis-je annuler à tout moment ?', r: 'Oui, vous pouvez annuler votre abonnement à tout moment depuis votre tableau de bord.' },
+              { q: 'Comment fonctionne l\'essai gratuit ?', r: 'L\'offre Starter est gratuite à vie. Pour Pro, profitez de 7 jours d\'essai sans engagement.' },
+              { q: 'Les paiements sont-ils sécurisés ?', r: 'Oui, tous les paiements sont traités par Stripe, le leader mondial des paiements en ligne.' },
+              { q: 'Puis-je changer de plan ?', r: 'Absolument ! Vous pouvez upgrader ou downgrader à tout moment depuis votre compte.' },
+            ].map((faq, i) => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <h4 className="font-semibold mb-1">{faq.q}</h4>
+                  <p className="text-sm text-muted-foreground">{faq.r}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// CV BUILDER PAGE
+// ============================================
+function CVBuilderPage() {
+  const { 
+    profile, setProfile, 
+    experiences, addExperience, removeExperience, 
+    educations, addEducation, removeEducation, 
+    certifications, addCertification, removeCertification, 
+    languages, addLanguage, removeLanguage, 
+    skills, addSkill, removeSkill, 
+    generatedCV, setGeneratedCV, 
+    canGenerateCV, incrementCVGeneration,
+    cvTemplate, setCvTemplate,
+    cvPrimaryColor, setCvPrimaryColor
+  } = useAppStore();
+  const [activeTab, setActiveTab] = useState('personal');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [cvScore, setCvScore] = useState(0);
+
+  const handleGenerateCV = async () => {
+    if (!canGenerateCV()) {
+      toast({ title: 'Limite atteinte', description: 'Passez à un plan supérieur pour générer plus de CV.', variant: 'destructive' });
+      return;
+    }
+    
+    setIsGenerating(true);
+    try {
+      // Call the real API
+      const response = await fetch('/api/cv/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile, experiences, educations, certifications, languages, skills }),
+      });
+      
+      if (!response.ok) throw new Error('Erreur lors de la génération');
+      
+      const data = await response.json();
+      incrementCVGeneration();
+      setGeneratedCV(data.cv);
+      setCvScore(data.score);
+      toast({ title: 'CV généré !', description: `Score ATS: ${data.score}/100` });
+    } catch {
+      toast({ title: 'Erreur', description: 'Impossible de générer le CV.', variant: 'destructive' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    setIsExporting(true);
+    try {
+      const response = await fetch('/api/cv/export-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          profile, experiences, educations, certifications, languages, skills,
+          template: cvTemplate,
+          primaryColor: cvPrimaryColor,
+          generatedCV
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.pdf) {
+        // Create download link
+        const link = document.createElement('a');
+        link.href = `data:application/pdf;base64,${data.pdf}`;
+        link.download = data.filename || 'CV.pdf';
+        link.click();
+        toast({ title: 'PDF téléchargé !', description: 'Votre CV est prêt.' });
+      } else if (data.cv) {
+        // Fallback: copy text to clipboard
+        await navigator.clipboard.writeText(data.cv);
+        toast({ title: 'CV copié !', description: 'Le PDF n\'est pas disponible, le texte a été copié.' });
+      }
+    } catch {
+      toast({ title: 'Erreur', description: 'Impossible d\'exporter le PDF.', variant: 'destructive' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto max-w-6xl py-8 px-4">
+      <div className="flex flex-col lg:flex-row gap-8">
+        <div className="flex-1">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold mb-2">Créer votre CV</h1>
+            <p className="text-muted-foreground">Remplissez vos informations pour générer un CV optimisé ATS</p>
+          </div>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid grid-cols-3 lg:grid-cols-6 gap-2 h-auto p-1">
+              <TabsTrigger value="personal" className="text-xs sm:text-sm">Personnel</TabsTrigger>
+              <TabsTrigger value="experience" className="text-xs sm:text-sm">Expériences</TabsTrigger>
+              <TabsTrigger value="education" className="text-xs sm:text-sm">Formation</TabsTrigger>
+              <TabsTrigger value="skills" className="text-xs sm:text-sm">Compétences</TabsTrigger>
+              <TabsTrigger value="languages" className="text-xs sm:text-sm">Langues</TabsTrigger>
+              <TabsTrigger value="certifications" className="text-xs sm:text-sm">Certifications</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="personal" className="space-y-6">
+              <Card>
+                <CardHeader><CardTitle className="flex items-center gap-2"><User className="h-5 w-5" />Informations personnelles</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>Prénom</Label><Input value={profile.firstName} onChange={(e) => setProfile({ firstName: e.target.value })} placeholder="Jean" /></div>
+                    <div className="space-y-2"><Label>Nom</Label><Input value={profile.lastName} onChange={(e) => setProfile({ lastName: e.target.value })} placeholder="Dupont" /></div>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>Email</Label><Input type="email" value={profile.email} onChange={(e) => setProfile({ email: e.target.value })} placeholder="jean@email.com" /></div>
+                    <div className="space-y-2"><Label>Téléphone</Label><Input value={profile.phone} onChange={(e) => setProfile({ phone: e.target.value })} placeholder="+33 6 12 34 56 78" /></div>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div className="space-y-2"><Label>Ville</Label><Input value={profile.city} onChange={(e) => setProfile({ city: e.target.value })} placeholder="Paris" /></div>
+                    <div className="space-y-2"><Label>Code postal</Label><Input value={profile.postalCode} onChange={(e) => setProfile({ postalCode: e.target.value })} placeholder="75001" /></div>
+                    <div className="space-y-2"><Label>Pays</Label><Input value={profile.country} onChange={(e) => setProfile({ country: e.target.value })} placeholder="France" /></div>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>LinkedIn</Label><Input value={profile.linkedin} onChange={(e) => setProfile({ linkedin: e.target.value })} placeholder="https://linkedin.com/in/..." /></div>
+                    <div className="space-y-2"><Label>Site web</Label><Input value={profile.website} onChange={(e) => setProfile({ website: e.target.value })} placeholder="https://..." /></div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Target className="h-5 w-5" />Objectif professionnel</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2"><Label>Résumé</Label><Textarea value={profile.summary} onChange={(e) => setProfile({ summary: e.target.value })} placeholder="Décrivez votre parcours..." rows={4} /></div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>Poste recherché</Label><Input value={profile.targetJobTitle} onChange={(e) => setProfile({ targetJobTitle: e.target.value })} placeholder="Développeur Full Stack" /></div>
+                    <div className="space-y-2"><Label>Localisation</Label><Input value={profile.targetLocation} onChange={(e) => setProfile({ targetLocation: e.target.value })} placeholder="Paris, Remote" /></div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={profile.remoteWork} onCheckedChange={(checked) => setProfile({ remoteWork: checked })} />
+                    <Label>Ouvert au télétravail</Label>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="experience" className="space-y-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2"><Briefcase className="h-5 w-5" />Expériences</CardTitle>
+                  <AddItemDialog type="experience" onAdd={(data) => addExperience({ id: crypto.randomUUID(), ...data } as any)} />
+                </CardHeader>
+                <CardContent>
+                  {experiences.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground"><Briefcase className="h-12 w-12 mx-auto mb-4 opacity-50" /><p>Aucune expérience</p></div>
+                  ) : (
+                    <div className="space-y-4">
+                      {experiences.map((exp) => (
+                        <Card key={exp.id}>
+                          <CardContent className="p-4">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-semibold">{exp.position}</h4>
+                                <p className="text-muted-foreground">{exp.company}</p>
+                                <p className="text-sm text-muted-foreground">{exp.startDate} - {exp.current ? 'Présent' : exp.endDate}</p>
+                              </div>
+                              <Button variant="ghost" size="sm" onClick={() => removeExperience(exp.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="education" className="space-y-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" />Formation</CardTitle>
+                  <AddItemDialog type="education" onAdd={(data) => addEducation({ id: crypto.randomUUID(), ...data } as any)} />
+                </CardHeader>
+                <CardContent>
+                  {educations.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground"><BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" /><p>Aucune formation</p></div>
+                  ) : (
+                    <div className="space-y-4">
+                      {educations.map((edu) => (
+                        <Card key={edu.id}>
+                          <CardContent className="p-4">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-semibold">{edu.degree}</h4>
+                                <p className="text-muted-foreground">{edu.school}</p>
+                              </div>
+                              <Button variant="ghost" size="sm" onClick={() => removeEducation(edu.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="skills" className="space-y-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5" />Compétences</CardTitle>
+                  <AddItemDialog type="skill" onAdd={(data) => addSkill({ id: crypto.randomUUID(), ...data } as any)} />
+                </CardHeader>
+                <CardContent>
+                  {skills.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground"><Wrench className="h-12 w-12 mx-auto mb-4 opacity-50" /><p>Aucune compétence</p></div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {skills.map((skill) => (
+                        <Badge key={skill.id} variant="secondary" className="px-3 py-1 cursor-pointer hover:bg-destructive hover:text-destructive-foreground" onClick={() => removeSkill(skill.id)}>
+                          {skill.name}<X className="h-3 w-3 ml-1" />
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="languages" className="space-y-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2"><Languages className="h-5 w-5" />Langues</CardTitle>
+                  <AddItemDialog type="language" onAdd={(data) => addLanguage({ id: crypto.randomUUID(), ...data } as any)} />
+                </CardHeader>
+                <CardContent>
+                  {languages.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground"><Languages className="h-12 w-12 mx-auto mb-4 opacity-50" /><p>Aucune langue</p></div>
+                  ) : (
+                    <div className="space-y-2">
+                      {languages.map((lang) => (
+                        <div key={lang.id} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                          <div><span className="font-medium">{lang.name}</span><Badge variant="outline" className="ml-2">{lang.level}</Badge></div>
+                          <Button variant="ghost" size="sm" onClick={() => removeLanguage(lang.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="certifications" className="space-y-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2"><Award className="h-5 w-5" />Certifications</CardTitle>
+                  <AddItemDialog type="certification" onAdd={(data) => addCertification({ id: crypto.randomUUID(), ...data } as any)} />
+                </CardHeader>
+                <CardContent>
+                  {certifications.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground"><Award className="h-12 w-12 mx-auto mb-4 opacity-50" /><p>Aucune certification</p></div>
+                  ) : (
+                    <div className="space-y-4">
+                      {certifications.map((cert) => (
+                        <Card key={cert.id}>
+                          <CardContent className="p-4">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-semibold">{cert.name}</h4>
+                                <p className="text-muted-foreground">{cert.issuer}</p>
+                              </div>
+                              <Button variant="ghost" size="sm" onClick={() => removeCertification(cert.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
+          <div className="mt-8 flex justify-center">
+            <Button size="lg" className="gradient-primary text-white gap-2" onClick={handleGenerateCV} disabled={isGenerating}>
+              {isGenerating ? <><RefreshCw className="h-5 w-5 animate-spin" />Génération...</> : <><Sparkles className="h-5 w-5" />Générer mon CV</>}
+            </Button>
+          </div>
+        </div>
+
+        <div className="lg:w-96">
+          <div className="sticky top-24 space-y-4">
+            {/* Template Selection */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Layout className="h-4 w-4" />
+                  Modèle
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-2">
+                  {CV_TEMPLATES.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setCvTemplate(t.id)}
+                      className={`relative rounded-lg border-2 p-2 transition-all ${
+                        cvTemplate === t.id 
+                          ? 'border-primary ring-2 ring-primary/20' 
+                          : 'border-muted hover:border-primary/50'
+                      }`}
+                    >
+                      <div 
+                        className="aspect-[3/4] rounded bg-gradient-to-br from-gray-100 to-gray-200 mb-1"
+                        style={{ 
+                          background: t.id === 'creative' 
+                            ? `linear-gradient(135deg, ${t.primaryColor}20 0%, ${t.primaryColor}40 100%)`
+                            : `linear-gradient(180deg, ${t.primaryColor}30 0%, transparent 40%)`
+                        }}
+                      >
+                        <div className="h-full flex flex-col">
+                          <div className="h-1/4" style={{ backgroundColor: t.id !== 'minimal' ? t.primaryColor : 'transparent' }} />
+                          <div className="flex-1 p-1">
+                            <div className="h-1 w-3/4 bg-gray-300 rounded mb-1" />
+                            <div className="h-0.5 w-1/2 bg-gray-200 rounded mb-2" />
+                            <div className="space-y-0.5">
+                              <div className="h-0.5 w-full bg-gray-200 rounded" />
+                              <div className="h-0.5 w-2/3 bg-gray-200 rounded" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-center truncate">{t.name}</p>
+                      {cvTemplate === t.id && (
+                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full flex items-center justify-center">
+                          <Check className="h-2 w-2 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Color Selection */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Paintbrush className="h-4 w-4" />
+                  Couleur
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {CV_COLORS.map((c) => (
+                    <button
+                      key={c.value}
+                      onClick={() => setCvPrimaryColor(c.value)}
+                      className={`w-8 h-8 rounded-full transition-all ${
+                        cvPrimaryColor === c.value 
+                          ? 'ring-2 ring-offset-2 ring-primary scale-110' 
+                          : 'hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: c.value }}
+                      title={c.name}
+                    >
+                      {cvPrimaryColor === c.value && (
+                        <Check className="h-4 w-4 mx-auto text-white" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* CV Preview */}
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Aperçu</CardTitle></CardHeader>
+              <CardContent>
+                {generatedCV ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Badge className="gradient-primary text-white">Score ATS: {cvScore}/100</Badge>
+                    </div>
+                    <div className="bg-muted rounded-lg p-4 text-sm whitespace-pre-wrap max-h-80 overflow-y-auto">{generatedCV}</div>
+                    <div className="space-y-2">
+                      <Button className="w-full gap-2 gradient-primary text-white" onClick={handleDownloadPDF} disabled={isExporting}>
+                        {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                        {isExporting ? 'Export...' : 'Télécharger PDF'}
+                      </Button>
+                      <Button variant="outline" className="w-full gap-2" onClick={async () => {
+                        await navigator.clipboard.writeText(generatedCV);
+                        toast({ title: 'Copié !', description: 'CV copié dans le presse-papier.' });
+                      }}>
+                        Copier le texte
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Votre CV apparaîtra ici</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// ADD ITEM DIALOG
+// ============================================
+function AddItemDialog({ type, onAdd }: { type: string; onAdd: (data: Record<string, unknown>) => void }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({});
+
+  const fields: Record<string, { key: string; label: string; placeholder: string; type?: string }[]> = {
+    experience: [
+      { key: 'company', label: 'Entreprise', placeholder: 'Nom' },
+      { key: 'position', label: 'Poste', placeholder: 'Titre' },
+      { key: 'startDate', label: 'Début', placeholder: '', type: 'month' },
+      { key: 'endDate', label: 'Fin', placeholder: '', type: 'month' },
+    ],
+    education: [
+      { key: 'school', label: 'École', placeholder: 'Nom' },
+      { key: 'degree', label: 'Diplôme', placeholder: 'Master...' },
+      { key: 'startDate', label: 'Début', placeholder: '', type: 'month' },
+      { key: 'endDate', label: 'Fin', placeholder: '', type: 'month' },
+    ],
+    skill: [
+      { key: 'name', label: 'Compétence', placeholder: 'JavaScript...' },
+    ],
+    language: [
+      { key: 'name', label: 'Langue', placeholder: 'Anglais...' },
+    ],
+    certification: [
+      { key: 'name', label: 'Nom', placeholder: 'AWS Certified...' },
+      { key: 'issuer', label: 'Organisme', placeholder: 'Amazon...' },
+    ],
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4" /></Button></DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Ajouter</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          {fields[type]?.map((f) => (
+            <div key={f.key} className="space-y-2">
+              <Label>{f.label}</Label>
+              <Input
+                type={f.type || 'text'}
+                value={form[f.key] || ''}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                placeholder={f.placeholder}
+              />
+            </div>
+          ))}
+          {type === 'language' && (
+            <div className="space-y-2">
+              <Label>Niveau</Label>
+              <Select value={form.level || ''} onValueChange={(v) => setForm({ ...form, level: v })}>
+                <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="beginner">Débutant</SelectItem>
+                  <SelectItem value="intermediate">Intermédiaire</SelectItem>
+                  <SelectItem value="advanced">Avancé</SelectItem>
+                  <SelectItem value="fluent">Courant</SelectItem>
+                  <SelectItem value="native">Natif</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <Button onClick={() => { onAdd(form); setForm({}); setOpen(false); }} className="w-full">Ajouter</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================
+// JOB SEARCH PAGE
+// ============================================
+function JobSearchPage() {
+  const { jobOffers, setJobOffers, canApply, incrementApplications, addApplication, profile, skills } = useAppStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
+
+  const mockJobs = [
+    { id: '1', title: 'Développeur Full Stack', company: 'TechCorp', location: 'Paris', description: 'React, Node.js, AWS', salary: '55k-70k', jobType: 'CDI', remote: true, matchScore: 92, source: 'LinkedIn', sourceUrl: '', publishedAt: '2024-01-15' },
+    { id: '2', title: 'Lead Developer', company: 'StartupVision', location: 'Lyon', description: 'Lead tech, architecture', salary: '60k-80k', jobType: 'CDI', remote: true, matchScore: 88, source: 'Welcome', sourceUrl: '', publishedAt: '2024-01-14' },
+    { id: '3', title: 'Backend Engineer', company: 'FinanceTech', location: 'Bordeaux', description: 'Node.js, PostgreSQL', salary: '45k-60k', jobType: 'CDI', remote: false, matchScore: 85, source: 'Indeed', sourceUrl: '', publishedAt: '2024-01-13' },
+    { id: '4', title: 'DevOps Engineer', company: 'CloudScale', location: 'Remote', description: 'AWS, Kubernetes, Terraform', salary: '50k-70k', jobType: 'CDI', remote: true, matchScore: 78, source: 'LinkedIn', sourceUrl: '', publishedAt: '2024-01-12' },
+  ];
+
+  const handleSearch = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/jobs/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile, skills, filters: {} }),
+      });
+      const data = await response.json();
+      setJobOffers(data.jobs?.length > 0 ? data.jobs : mockJobs);
+    } catch {
+      setJobOffers(mockJobs);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (jobOffers.length === 0) handleSearch();
+  }, []);
+
+  const handleApply = async (job: typeof mockJobs[0]) => {
+    if (!canApply()) {
+      toast({ title: 'Limite atteinte', description: 'Passez à un plan supérieur.', variant: 'destructive' });
+      return;
+    }
+    
+    setApplyingJobId(job.id);
+    try {
+      const response = await fetch('/api/applications/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id, profile, skills, jobOffer: job }),
+      });
+      
+      const data = await response.json();
+      incrementApplications();
+      addApplication({ 
+        id: data.applicationId || crypto.randomUUID(), 
+        jobId: job.id, 
+        jobTitle: job.title, 
+        company: job.company, 
+        status: 'sent', 
+        coverLetter: data.coverLetter || '', 
+        sentAt: new Date().toISOString() 
+      });
+      toast({ title: 'Candidature envoyée !', description: `Votre candidature pour ${job.title} a été envoyée.` });
+    } catch {
+      incrementApplications();
+      addApplication({ id: crypto.randomUUID(), jobId: job.id, jobTitle: job.title, company: job.company, status: 'sent', coverLetter: '', sentAt: new Date().toISOString() });
+      toast({ title: 'Candidature envoyée !', description: `Votre candidature pour ${job.title} a été envoyée.` });
+    } finally {
+      setApplyingJobId(null);
+    }
+  };
+
+  return (
+    <div className="container mx-auto max-w-6xl py-8 px-4">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Recherche d'emploi</h1>
+        <p className="text-muted-foreground">Trouvez les meilleures opportunités</p>
+      </div>
+
+      <div className="mb-6">
+        <Button onClick={handleSearch} disabled={isLoading} className="gap-2">
+          {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          {isLoading ? 'Recherche en cours...' : 'Actualiser les offres'}
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        {jobOffers.map((job) => (
+          <Card key={job.id} className="hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><Building2 className="h-6 w-6 text-primary" /></div>
+                  <div>
+                    <h3 className="font-semibold text-lg">{job.title}</h3>
+                    <p className="text-muted-foreground">{job.company}</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {job.location && <Badge variant="secondary" className="gap-1"><MapPin className="h-3 w-3" />{job.location}</Badge>}
+                      {job.remote && <Badge variant="secondary" className="gap-1"><Globe className="h-3 w-3" />Remote</Badge>}
+                      {job.salary && <Badge variant="secondary" className="gap-1"><DollarSign className="h-3 w-3" />{job.salary}</Badge>}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">{job.description}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="text-right"><div className="text-sm font-medium">Match</div><div className="text-2xl font-bold text-accent">{job.matchScore}%</div></div>
+                    <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center"><Star className="h-6 w-6 text-accent" /></div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-1" />Détails</Button>
+                    <Button size="sm" className="gradient-primary text-white" onClick={() => handleApply(job)}><Send className="h-4 w-4 mr-1" />Postuler</Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// DASHBOARD PAGE
+// ============================================
+function DashboardPage() {
+  const { applications, subscription, usage, getRemainingApplications, cancelSubscription, setCurrentView } = useAppStore();
+  const planName = subscription?.plan?.toUpperCase() || 'STARTER';
+  const remaining = getRemainingApplications();
+  const [isLoadingPortal, setIsLoadingPortal] = useState(false);
+
+  const stats = { total: applications.length || 12, responseRate: 35, views: 8, interviews: 3 };
+  const displayApps = applications.length > 0 ? applications : [
+    { id: '1', jobTitle: 'Développeur Full Stack', company: 'TechCorp', status: 'replied' as const, sentAt: '2024-01-15' },
+    { id: '2', jobTitle: 'Lead Developer', company: 'StartupVision', status: 'viewed' as const, sentAt: '2024-01-14' },
+    { id: '3', jobTitle: 'Backend Engineer', company: 'FinanceTech', status: 'sent' as const, sentAt: '2024-01-13' },
+  ];
+
+  const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; color: string }> = {
+    pending: { label: 'En attente', icon: Clock, color: 'bg-yellow-500' },
+    sent: { label: 'Envoyée', icon: Send, color: 'bg-blue-500' },
+    viewed: { label: 'Vue', icon: Eye, color: 'bg-purple-500' },
+    replied: { label: 'Réponse', icon: CheckCircle, color: 'bg-green-500' },
+    rejected: { label: 'Refusée', icon: XCircle, color: 'bg-red-500' },
+  };
+
+  const handleBillingPortal = async () => {
+    if (!subscription?.stripeCustomerId) {
+      toast({ title: 'Non disponible', description: 'Gérez votre abonnement depuis la page Tarifs.', variant: 'destructive' });
+      return;
+    }
+    
+    setIsLoadingPortal(true);
+    try {
+      const response = await fetch('/api/stripe/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId: subscription.stripeCustomerId }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.url) {
+        window.open(data.url, '_blank');
+      }
+    } catch {
+      toast({ title: 'Erreur', description: 'Impossible d\'ouvrir le portail de facturation.', variant: 'destructive' });
+    } finally {
+      setIsLoadingPortal(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto max-w-6xl py-8 px-4">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Tableau de bord</h1>
+        <p className="text-muted-foreground">Suivez vos candidatures</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><Send className="h-5 w-5 text-primary" /></div><div><div className="text-2xl font-bold">{stats.total}</div><div className="text-sm text-muted-foreground">Candidatures</div></div></div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center"><TrendingUp className="h-5 w-5 text-accent" /></div><div><div className="text-2xl font-bold">{stats.responseRate}%</div><div className="text-sm text-muted-foreground">Réponses</div></div></div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center"><Eye className="h-5 w-5 text-purple-500" /></div><div><div className="text-2xl font-bold">{stats.views}</div><div className="text-sm text-muted-foreground">Vues</div></div></div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center"><Calendar className="h-5 w-5 text-green-500" /></div><div><div className="text-2xl font-bold">{stats.interviews}</div><div className="text-sm text-muted-foreground">Entretiens</div></div></div></CardContent></Card>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Applications */}
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="flex items-center gap-2"><Briefcase className="h-5 w-5" />Candidatures récentes</CardTitle></CardHeader>
+          <CardContent>
+            <ScrollArea className="h-80">
+              <div className="space-y-4">
+                {displayApps.map((app) => {
+                  const s = statusConfig[app.status];
+                  const Icon = s.icon;
+                  return (
+                    <div key={app.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${s.color}`} />
+                        <div><div className="font-medium">{app.jobTitle}</div><div className="text-sm text-muted-foreground">{app.company}</div></div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="gap-1"><Icon className="h-3 w-3" />{s.label}</Badge>
+                        <span className="text-xs text-muted-foreground">{app.sentAt}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+
+        {/* Subscription */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5" />Abonnement</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-lg">{planName}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {remaining === -1 ? 'Candidatures illimitées' : `${remaining} candidatures restantes`}
+                  </div>
+                  {subscription?.currentPeriodEnd && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Renouvellement: {new Date(subscription.currentPeriodEnd).toLocaleDateString('fr-FR')}
+                    </div>
+                  )}
+                </div>
+                <Crown className="h-8 w-8 text-accent" />
+              </div>
+              
+              {subscription?.cancelAtPeriodEnd && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                  Votre abonnement se terminera le {subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString('fr-FR') : 'fin de période'}.
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                {subscription && subscription.plan !== 'elite' && (
+                  <Button className="w-full" onClick={() => setCurrentView('pricing')}>Upgrader</Button>
+                )}
+                
+                {subscription && subscription.plan !== 'starter' && subscription.stripeCustomerId && (
+                  <Button 
+                    variant="outline" 
+                    className="w-full" 
+                    onClick={handleBillingPortal}
+                    disabled={isLoadingPortal}
+                  >
+                    {isLoadingPortal ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Settings className="h-4 w-4 mr-2" />}
+                    Gérer l'abonnement
+                  </Button>
+                )}
+                
+                {subscription && subscription.plan !== 'starter' && !subscription.stripeCustomerId && (
+                  <Button variant="outline" className="w-full" onClick={cancelSubscription}>
+                    Annuler le renouvellement
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Performance</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2"><div className="flex justify-between text-sm"><span>Réponses</span><span className="font-medium">{stats.responseRate}%</span></div><Progress value={stats.responseRate} className="h-2" /></div>
+              <div className="space-y-2"><div className="flex justify-between text-sm"><span>Profil</span><span className="font-medium">75%</span></div><Progress value={75} className="h-2" /></div>
+              <div className="space-y-2"><div className="flex justify-between text-sm"><span>Score CV</span><span className="font-medium">92%</span></div><Progress value={92} className="h-2" /></div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// IMPORT CV PAGE
+// ============================================
+function ImportCVPage() {
+  const { importedCVFile, setImportedCVFile, clearImportedCVFile, setCurrentView } = useAppStore();
+  const [isImporting, setIsImporting] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleFileUpload = async (file: File) => {
+    setIsImporting(true);
+    setDragActive(false);
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/cv/import', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.file) {
+        setImportedCVFile({
+          name: data.file.name,
+          type: data.file.type,
+          extension: data.file.extension,
+          size: data.file.size,
+          dataUrl: data.file.dataUrl,
+          uploadedAt: new Date().toISOString()
+        });
+        toast({ 
+          title: 'CV importé avec succès !', 
+          description: 'Votre CV est prêt à être utilisé pour vos candidatures.' 
+        });
+      } else {
+        throw new Error(data.error || 'Erreur lors de l\'import');
+      }
+    } catch (error: any) {
+      toast({ 
+        title: 'Erreur', 
+        description: error.message || 'Impossible d\'importer le CV. Essayez un autre fichier.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (importedCVFile?.dataUrl) {
+      const link = document.createElement('a');
+      link.href = importedCVFile.dataUrl;
+      link.download = importedCVFile.name;
+      link.click();
+    }
+  };
+
+  const handlePreview = () => {
+    if (importedCVFile?.dataUrl) {
+      window.open(importedCVFile.dataUrl, '_blank');
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const getFileIcon = (extension: string) => {
+    switch (extension) {
+      case 'pdf': return '📄';
+      case 'doc':
+      case 'docx': return '📝';
+      case 'txt': return '📃';
+      default: return '📁';
+    }
+  };
+
+  return (
+    <div className="container mx-auto max-w-4xl py-8 px-4">
+      <div className="mb-8 text-center">
+        <h1 className="text-3xl font-bold mb-2">Importer votre CV</h1>
+        <p className="text-muted-foreground">Importez votre CV existant (PDF, DOC, DOCX, TXT) pour l'utiliser directement dans vos candidatures</p>
+      </div>
+
+      {/* Imported CV Display */}
+      {importedCVFile ? (
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              Votre CV importé
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* File Info */}
+            <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
+              <div className="text-4xl">{getFileIcon(importedCVFile.extension)}</div>
+              <div className="flex-1">
+                <div className="font-medium">{importedCVFile.name}</div>
+                <div className="text-sm text-muted-foreground">
+                  {formatFileSize(importedCVFile.size)} • {importedCVFile.extension.toUpperCase()}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Importé le {new Date(importedCVFile.uploadedAt).toLocaleString('fr-FR')}
+                </div>
+              </div>
+              <Badge variant="secondary" className="bg-green-100 text-green-800">
+                Prêt à l'emploi
+              </Badge>
+            </div>
+
+            {/* Preview for PDF */}
+            {importedCVFile.extension === 'pdf' && (
+              <div className="border rounded-lg overflow-hidden">
+                <div className="bg-muted p-2 text-sm font-medium flex items-center justify-between">
+                  <span>Aperçu du PDF</span>
+                  <Button variant="ghost" size="sm" onClick={handlePreview}>
+                    <Eye className="h-4 w-4 mr-1" /> Agrandir
+                  </Button>
+                </div>
+                <iframe
+                  src={importedCVFile.dataUrl}
+                  className="w-full h-96"
+                  title="CV Preview"
+                />
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-3">
+              <Button variant="outline" onClick={handlePreview}>
+                <Eye className="h-4 w-4 mr-2" /> Aperçu
+              </Button>
+              <Button variant="outline" onClick={handleDownload}>
+                <Download className="h-4 w-4 mr-2" /> Télécharger
+              </Button>
+              <Button className="gradient-primary text-white" onClick={() => setCurrentView('auto-apply')}>
+                <Send className="h-4 w-4 mr-2" /> Utiliser pour candidater
+              </Button>
+              <Button variant="destructive" onClick={clearImportedCVFile}>
+                <Trash2 className="h-4 w-4 mr-2" /> Supprimer
+              </Button>
+            </div>
+
+            {/* Info Box */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+              <p className="font-medium text-blue-800 mb-1">💡 Bon à savoir</p>
+              <p className="text-blue-700">
+                Votre CV importé sera utilisé tel quel pour vos candidatures automatiques. 
+                Il sera envoyé en pièce jointe avec vos lettres de motivation personnalisées.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        /* Upload Zone */
+        <Card className="mb-8">
+          <CardContent className="p-8">
+            <div
+              className={`border-2 border-dashed rounded-xl p-12 text-center transition-all ${
+                dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                const file = e.dataTransfer.files[0];
+                if (file) handleFileUpload(file);
+              }}
+            >
+              {isImporting ? (
+                <div className="space-y-4">
+                  <RefreshCw className="h-16 w-16 mx-auto animate-spin text-primary" />
+                  <p className="text-lg font-medium">Import en cours...</p>
+                  <p className="text-sm text-muted-foreground">Veuillez patienter</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <FileUp className="h-16 w-16 mx-auto text-muted-foreground" />
+                  <p className="text-lg font-medium">Glissez votre CV ici</p>
+                  <p className="text-sm text-muted-foreground">ou cliquez pour sélectionner</p>
+                  <input
+                    type="file"
+                    id="cv-upload"
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.txt"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileUpload(file);
+                    }}
+                  />
+                  <Button asChild>
+                    <label htmlFor="cv-upload" className="cursor-pointer">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Choisir un fichier
+                    </label>
+                  </Button>
+                  <p className="text-xs text-muted-foreground">Formats supportés: PDF, DOC, DOCX, TXT</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Features */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <FileText className="h-10 w-10 mx-auto mb-3 text-primary" />
+            <h3 className="font-semibold mb-1">Import simple</h3>
+            <p className="text-sm text-muted-foreground">Glissez-déposez ou sélectionnez votre CV existant</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6 text-center">
+            <Shield className="h-10 w-10 mx-auto mb-3 text-primary" />
+            <h3 className="font-semibold mb-1">Données sécurisées</h3>
+            <p className="text-sm text-muted-foreground">Votre CV est stocké localement sur votre appareil</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6 text-center">
+            <Zap className="h-10 w-10 mx-auto mb-3 text-primary" />
+            <h3 className="font-semibold mb-1">Candidature rapide</h3>
+            <p className="text-sm text-muted-foreground">Utilisez votre CV directement pour postuler</p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// AUTO-APPLY PAGE
+// ============================================
+function AutoApplyPage() {
+  const { profile, experiences, skills, jobPreferences, setJobPreferences, autoApply, setAutoApply, frequency, setFrequency, addApplication, subscription, importedCVFile } = useAppStore();
+  const [isRunning, setIsRunning] = useState(false);
+  const [lastRun, setLastRun] = useState<string | null>(null);
+  const [applicationsToday, setApplicationsToday] = useState(0);
+
+  const handleStartAutoApply = async () => {
+    if (!subscription || subscription.plan === 'starter') {
+      toast({ title: 'Abonnement requis', description: 'Passez à un plan Pro ou Elite pour utiliser l\'auto-candidature.', variant: 'destructive' });
+      return;
+    }
+
+    if (!importedCVFile) {
+      toast({ title: 'CV requis', description: 'Importez d\'abord votre CV dans l\'onglet "Importer".', variant: 'destructive' });
+      return;
+    }
+
+    setIsRunning(true);
+    try {
+      const response = await fetch('/api/auto-apply/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile,
+          experiences,
+          skills,
+          preferences: jobPreferences,
+          maxApplications: jobPreferences.maxApplicationsPerDay,
+          importedCV: {
+            name: importedCVFile.name,
+            type: importedCVFile.type,
+            dataUrl: importedCVFile.dataUrl
+          }
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        data.applications.forEach((app: any) => {
+          addApplication({
+            id: crypto.randomUUID(),
+            jobId: app.jobId,
+            jobTitle: app.jobTitle,
+            company: app.company,
+            status: 'sent',
+            coverLetter: app.coverLetter,
+            sentAt: app.sentAt
+          });
+        });
+
+        setApplicationsToday(data.applications.length);
+        setLastRun(new Date().toISOString());
+        toast({ title: 'Candidatures envoyées !', description: data.message });
+      }
+    } catch {
+      toast({ title: 'Erreur', description: 'Impossible de lancer les candidatures automatiques.', variant: 'destructive' });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto max-w-6xl py-8 px-4">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+          <Zap className="h-8 w-8 text-primary" />
+          Auto-Candidature IA
+        </h1>
+        <p className="text-muted-foreground">Laissez l'IA postuler automatiquement aux offres correspondant à votre profil</p>
+      </div>
+
+      {/* Status Card */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Statut</span>
+            {autoApply ? (
+              <Badge className="bg-green-500"><Play className="h-3 w-3 mr-1" />Actif</Badge>
+            ) : (
+              <Badge variant="secondary"><Pause className="h-3 w-3 mr-1" />Inactif</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="text-center p-4 bg-muted rounded-lg">
+              <div className="text-2xl font-bold">{applicationsToday}</div>
+              <div className="text-sm text-muted-foreground">Candidatures aujourd'hui</div>
+            </div>
+            <div className="text-center p-4 bg-muted rounded-lg">
+              <div className="text-2xl font-bold">{jobPreferences.maxApplicationsPerDay}</div>
+              <div className="text-sm text-muted-foreground">Limite quotidienne</div>
+            </div>
+            <div className="text-center p-4 bg-muted rounded-lg">
+              <div className="text-2xl font-bold">{lastRun ? new Date(lastRun).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}</div>
+              <div className="text-sm text-muted-foreground">Dernière exécution</div>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <Button
+              className="gradient-primary text-white flex-1"
+              onClick={handleStartAutoApply}
+              disabled={isRunning || !profile.firstName}
+            >
+              {isRunning ? (
+                <><RefreshCw className="h-4 w-4 animate-spin mr-2" />En cours...</>
+              ) : (
+                <><Zap className="h-4 w-4 mr-2" />Lancer maintenant</>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setAutoApply(!autoApply)}
+            >
+              {autoApply ? <><Pause className="h-4 w-4 mr-2" />Désactiver</> : <><Play className="h-4 w-4 mr-2" />Activer automatique</>}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Preferences */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Préférences de recherche
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Types de contrat</Label>
+              <div className="flex flex-wrap gap-2">
+                {['CDI', 'CDD', 'Freelance', 'Stage', 'Alternance'].map((type) => (
+                  <Badge
+                    key={type}
+                    variant={jobPreferences.jobTypes.includes(type) ? 'default' : 'outline'}
+                    className="cursor-pointer"
+                    onClick={() => {
+                      const types = jobPreferences.jobTypes.includes(type)
+                        ? jobPreferences.jobTypes.filter(t => t !== type)
+                        : [...jobPreferences.jobTypes, type];
+                      setJobPreferences({ jobTypes: types });
+                    }}
+                  >
+                    {type}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Localisations recherchées</Label>
+              <Input
+                placeholder="Paris, Lyon, Remote..."
+                value={jobPreferences.locations.join(', ')}
+                onChange={(e) => setJobPreferences({ locations: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Mots-clés à inclure</Label>
+              <Input
+                placeholder="React, Node.js, Full Stack..."
+                value={jobPreferences.keywords.join(', ')}
+                onChange={(e) => setJobPreferences({ keywords: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Label>Remote uniquement</Label>
+              <Switch
+                checked={jobPreferences.remoteOnly}
+                onCheckedChange={(checked) => setJobPreferences({ remoteOnly: checked })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Salaire minimum (k€)</Label>
+              <Input
+                type="number"
+                placeholder="40"
+                value={jobPreferences.minSalary || ''}
+                onChange={(e) => setJobPreferences({ minSalary: e.target.value ? parseInt(e.target.value) : null })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Max candidatures/jour</Label>
+              <Select
+                value={jobPreferences.maxApplicationsPerDay.toString()}
+                onValueChange={(v) => setJobPreferences({ maxApplicationsPerDay: parseInt(v) })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3">3 candidatures</SelectItem>
+                  <SelectItem value="5">5 candidatures</SelectItem>
+                  <SelectItem value="10">10 candidatures</SelectItem>
+                  <SelectItem value="20">20 candidatures</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Schedule */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Planification
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Fréquence</Label>
+              <Select value={frequency} onValueChange={(v: 'daily' | 'weekly' | 'custom') => setFrequency(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Quotidienne</SelectItem>
+                  <SelectItem value="weekly">Hebdomadaire</SelectItem>
+                  <SelectItem value="custom">Personnalisée</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm">
+              <p className="font-medium text-yellow-800 mb-1">⚠️ Configuration requise</p>
+              <p className="text-yellow-700">
+                Pour utiliser l'auto-candidature, assurez-vous que votre profil est complet et que votre CV est généré.
+              </p>
+            </div>
+
+            {!subscription || subscription.plan === 'starter' ? (
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+                <p className="font-medium mb-2">🔓 Fonctionnalité Premium</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                  L'auto-candidature automatique est disponible à partir du plan Pro.
+                </p>
+                <Button onClick={() => useAppStore.getState().setCurrentView('pricing')}>
+                  Voir les tarifs
+                </Button>
+              </div>
+            ) : (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm">
+                <p className="font-medium text-green-800 mb-1">✅ Plan {subscription.plan.toUpperCase()}</p>
+                <p className="text-green-700">
+                  Vous avez accès à toutes les fonctionnalités d'auto-candidature.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// FOOTER
+// ============================================
+function Footer() {
+  const { setCurrentView } = useAppStore();
+  
+  return (
+    <footer className="border-t bg-card mt-auto">
+      <div className="container mx-auto max-w-6xl px-4 py-8">
+        <div className="grid md:grid-cols-4 gap-8">
+          <div className="md:col-span-2">
+            <div className="flex items-center gap-2 mb-4">
+              <Image src="/logo.png" alt="CVJobScrap" width={32} height={32} className="h-8 w-auto" />
+              <span className="text-lg font-bold">CVJobScrap</span>
+            </div>
+            <p className="text-muted-foreground text-sm max-w-md">Votre partenaire IA pour une recherche d'emploi optimisée.</p>
+          </div>
+          <div>
+            <h4 className="font-semibold mb-4">Navigation</h4>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li><button onClick={() => setCurrentView('home')} className="hover:text-foreground">Accueil</button></li>
+              <li><button onClick={() => setCurrentView('cv-builder')} className="hover:text-foreground">Créer un CV</button></li>
+              <li><button onClick={() => setCurrentView('job-search')} className="hover:text-foreground">Emplois</button></li>
+              <li><button onClick={() => setCurrentView('pricing')} className="hover:text-foreground">Tarifs</button></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-semibold mb-4">Légal</h4>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li><button className="hover:text-foreground">Mentions légales</button></li>
+              <li><button className="hover:text-foreground">Confidentialité</button></li>
+              <li><button className="hover:text-foreground">CGU</button></li>
+            </ul>
+          </div>
+        </div>
+        <Separator className="my-6" />
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
+          <div>© 2024 CVJobScrap. Tous droits réservés.</div>
+          <div className="flex gap-4">
+            <button className="hover:text-foreground">Twitter</button>
+            <button className="hover:text-foreground">LinkedIn</button>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
