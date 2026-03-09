@@ -212,8 +212,16 @@ export async function POST(request: NextRequest) {
         yPosition += 8;
 
         educations.forEach((edu: any) => {
-          const period = edu.period || `${edu.startDate || ''} - ${edu.current ? 'Présent' : (edu.endDate || '')}`;
-          addText(period, contentX, yPosition, { fontSize: 9, fontStyle: 'bold' });
+          let period = edu.period || "";
+          if (!period && (edu.startDate || edu.endDate)) {
+            const start = edu.startDate || "";
+            const end = edu.current ? 'Présent' : (edu.endDate || "");
+            period = `${start} ${start && end ? '-' : ''} ${end}`.trim();
+          }
+          
+          if (period) {
+            addText(period, contentX, yPosition, { fontSize: 9, fontStyle: 'bold' });
+          }
           addText(edu.degree || '', contentX + 30, yPosition, { fontSize: 9, fontStyle: 'bold' });
           yPosition += 5;
           addText(edu.school || '', contentX + 30, yPosition, { fontSize: 9, color: '#666666' });
@@ -229,13 +237,21 @@ export async function POST(request: NextRequest) {
         yPosition += 8;
 
         experiences.forEach((exp: any) => {
-          if (yPosition > pageHeight - 40) {
+          if (yPosition > pageHeight - 50) {
             doc.addPage();
             yPosition = margin;
           }
 
-          const period = exp.period || `${exp.startDate || ''} - ${exp.current ? 'Présent' : (exp.endDate || '')}`;
-          addText(period, contentX, yPosition, { fontSize: 9, fontStyle: 'bold' });
+          let period = exp.period || "";
+          if (!period && (exp.startDate || exp.endDate)) {
+            const start = exp.startDate || "";
+            const end = exp.current ? 'Présent' : (exp.endDate || "");
+            period = `${start} ${start && end ? '-' : ''} ${end}`.trim();
+          }
+
+          if (period) {
+            addText(period, contentX, yPosition, { fontSize: 9, fontStyle: 'bold' });
+          }
           addText(exp.company || '', contentX, yPosition + 5, { fontSize: 9, fontStyle: 'bold', color: '#666666' });
           
           addText((exp.position || '').toUpperCase(), contentX + 30, yPosition, { fontSize: 9, fontStyle: 'bold' });
@@ -252,34 +268,44 @@ export async function POST(request: NextRequest) {
 
       // Skills Bottom Section
       if (skills.length > 0 || languages.length > 0) {
-        yPosition = Math.max(yPosition, pageHeight - 70);
+        yPosition += 10;
+        if (yPosition > pageHeight - 40) {
+          doc.addPage();
+          yPosition = margin;
+          if (template === 'modern' || template === 'elegant' || template === 'creative') {
+             setFillColor(primaryColor);
+             doc.rect(0, 0, pageWidth * 0.35, pageHeight, 'F');
+          }
+        }
+
         addText('COMPÉTENCES', contentX, yPosition, { fontSize: 13, fontStyle: 'bold', color: '#333333' });
         doc.line(contentX + 40, yPosition - 1, contentX + contentWidth, yPosition - 1);
         yPosition += 10;
 
         const colWidth = contentWidth / 2;
+        const skillsSectionY = yPosition;
         
-        // Languages
+        let languagesY = skillsSectionY;
         if (languages.length > 0) {
-          addText('LANGUES', contentX, yPosition, { fontSize: 9, fontStyle: 'bold' });
-          yPosition += 6;
+          addText('LANGUES', contentX, languagesY, { fontSize: 9, fontStyle: 'bold' });
+          languagesY += 6;
           languages.forEach((lang: any) => {
-            addText(`${lang.name}: ${lang.level}`, contentX, yPosition, { fontSize: 8.5 });
-            yPosition += 5;
+            addText(`${lang.name}: ${lang.level}`, contentX, languagesY, { fontSize: 8.5 });
+            languagesY += 5;
           });
         }
 
-        // Software Skills
+        let softwareY = skillsSectionY;
         if (skills.length > 0) {
-          let skillY = pageHeight - 60;
-          addText('LOGICIELS MAÎTRISÉS', contentX + colWidth, skillY, { fontSize: 9, fontStyle: 'bold' });
-          skillY += 6;
+          addText('LOGICIELS MAÎTRISÉS', contentX + colWidth, softwareY, { fontSize: 9, fontStyle: 'bold' });
+          softwareY += 6;
           skills.forEach((skill: any) => {
             const skillName = skill.name || skill;
-            addText(`• ${skillName}`, contentX + colWidth, skillY, { fontSize: 8.5 });
-            skillY += 5;
+            addText(`• ${skillName}`, contentX + colWidth, softwareY, { fontSize: 8.5 });
+            softwareY += 5;
           });
         }
+        yPosition = Math.max(languagesY, softwareY) + 10;
       }
     }
 
