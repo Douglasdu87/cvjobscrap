@@ -1021,15 +1021,17 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
                 <User className="w-16 h-16 text-white/50" />
               </div>
 
-              <div className="mb-10">
-                <h3 className="text-xl font-medium tracking-[0.2em] mb-4 text-white uppercase bg-white/10 p-2 text-center rounded">Profil</h3>
+              <div className="mb-10 text-center">
+                <h3 className="text-xl font-medium tracking-[0.2em] mb-2 text-white uppercase">Profil</h3>
+                <div className="h-px w-full bg-white/30 mb-4"></div>
                 <p className="text-sm leading-relaxed text-blue-50/90 text-justify">
                   {summary || "Déterminé, sérieux, autonome et conscient du travail qui m'attend."}
                 </p>
               </div>
 
               <div className="mb-10 text-sm">
-                <h3 className="text-xl font-medium tracking-[0.2em] mb-4 text-white uppercase bg-white/10 p-2 text-center rounded">Contact</h3>
+                <h3 className="text-xl font-medium tracking-[0.2em] mb-2 text-white uppercase text-center">Contact</h3>
+                <div className="h-px w-full bg-white/30 mb-4"></div>
                 <div className="space-y-4">
                   {(header?.location || header?.address) && (
                     <div className="flex items-start gap-4">
@@ -1059,8 +1061,9 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
               </div>
 
               {interests && interests.length > 0 && (
-                <div className="mb-10">
-                  <h3 className="text-xl font-medium tracking-[0.2em] mb-6 text-white uppercase bg-white/10 p-2 text-center rounded">Intérêts</h3>
+                <div className="mb-10 text-center">
+                  <h3 className="text-xl font-medium tracking-[0.2em] mb-2 text-white uppercase">Intérêts</h3>
+                  <div className="h-px w-full bg-white/30 mb-6"></div>
                   <div className="space-y-4">
                     {interests.map((int: string, i: number) => (
                       <div key={i} className="flex items-center gap-4">
@@ -1090,7 +1093,7 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
                   <section>
                     <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
                       Formation
-                      <div className="h-px flex-1 bg-gray-300"></div>
+                      <div className="h-px flex-1 bg-gray-300 mt-1"></div>
                     </h3>
                     <div className="space-y-3">
                       {educations.map((edu: any, i: number) => (
@@ -1098,8 +1101,12 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
                           <span className="font-bold text-gray-900">{edu.period || `${edu.startDate} - ${edu.endDate}`}</span>
                           <span className="mx-2 text-gray-400">-</span>
                           <span className="font-semibold text-gray-800">{edu.degree}</span>
-                          <span className="mx-2 text-gray-400">-</span>
-                          <span className="text-gray-600">{edu.school}</span>
+                          {edu.school && !(edu.degree && edu.degree.toLowerCase().includes(edu.school.toLowerCase())) && (
+                            <>
+                              <span className="mx-2 text-gray-400">-</span>
+                              <span className="text-gray-600">{edu.school}</span>
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1110,8 +1117,7 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
                   <section>
                     <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
                       Expérience
-                      <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
-                      <div className="h-px flex-1 bg-gray-300"></div>
+                      <div className="h-px flex-1 bg-gray-300 mt-1"></div>
                     </h3>
                     <div className="space-y-8">
                       {experiences.map((exp: any, i: number) => (

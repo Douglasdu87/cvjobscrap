@@ -127,25 +127,25 @@ export async function POST(request: NextRequest) {
       
       // Sidebar: Profil
       let sideY = 60;
-      setFillColor(getLighterColor(primaryColor, 90));
-      doc.roundedRect(sidebarMargin, sideY - 5, sidebarWidth - sidebarMargin * 2, 10, 1, 1, 'F');
-      addText('PROFIL', sidebarWidth / 2, sideY + 2, { fontSize: 11, fontStyle: 'bold', color: '#ffffff', align: 'center' });
-      sideY += 12;
+      addText('PROFIL', sidebarWidth / 2, sideY, { fontSize: 11, fontStyle: 'bold', color: '#ffffff', align: 'center' });
+      doc.setLineWidth(0.2);
+      doc.line(sidebarMargin + 5, sideY + 2, sidebarWidth - sidebarMargin - 5, sideY + 2);
+      sideY += 10;
       
       const summaryText = aiSummary || "Déterminé, sérieux, autonome et conscient du travail qui m'attend.";
-      const summaryHeight = addText(summaryText, sidebarMargin + 2, sideY, { 
+      const summaryHeight = addText(summaryText, sidebarWidth / 2, sideY, { 
         fontSize: 8.5, 
         color: '#ffffff', 
-        maxWidth: sidebarWidth - sidebarMargin * 2 - 4,
-        lineHeight: 1.5
+        maxWidth: sidebarWidth - sidebarMargin * 2,
+        align: 'center',
+        lineHeight: 1.4
       });
-      sideY += summaryHeight + 15;
+      sideY += summaryHeight + 20;
 
       // Sidebar: Contact
-      setFillColor(getLighterColor(primaryColor, 90));
-      doc.roundedRect(sidebarMargin, sideY - 5, sidebarWidth - sidebarMargin * 2, 10, 1, 1, 'F');
-      addText('CONTACT', sidebarWidth / 2, sideY + 2, { fontSize: 11, fontStyle: 'bold', color: '#ffffff', align: 'center' });
-      sideY += 12;
+      addText('CONTACT', sidebarWidth / 2, sideY, { fontSize: 11, fontStyle: 'bold', color: '#ffffff', align: 'center' });
+      doc.line(sidebarMargin + 5, sideY + 2, sidebarWidth - sidebarMargin - 5, sideY + 2);
+      sideY += 10;
 
       const contactX = sidebarMargin + 5;
       if (profile?.city || aiHeader.location) {
@@ -168,10 +168,9 @@ export async function POST(request: NextRequest) {
       // Sidebar: Interests
       if (interests.length > 0) {
         sideY += 15;
-        setFillColor(getLighterColor(primaryColor, 90));
-        doc.roundedRect(sidebarMargin, sideY - 5, sidebarWidth - sidebarMargin * 2, 10, 1, 1, 'F');
-        addText('INTÉRÊTS', sidebarWidth / 2, sideY + 2, { fontSize: 11, fontStyle: 'bold', color: '#ffffff', align: 'center' });
-        sideY += 12;
+        addText('INTÉRÊTS', sidebarWidth / 2, sideY, { fontSize: 11, fontStyle: 'bold', color: '#ffffff', align: 'center' });
+        doc.line(sidebarMargin + 5, sideY + 2, sidebarWidth - sidebarMargin - 5, sideY + 2);
+        sideY += 10;
 
         interests.forEach((interest: string) => {
           addText(interest, contactX, sideY, { fontSize: 8.5, color: '#ffffff' });
@@ -206,7 +205,7 @@ export async function POST(request: NextRequest) {
       // Formation
       if (educations.length > 0) {
         addText('FORMATION', contentX, yPosition, { fontSize: 13, fontStyle: 'bold', color: '#333333' });
-        doc.setLineWidth(0.5);
+        doc.setLineWidth(0.4);
         setDrawColor('#cccccc');
         doc.line(contentX + 35, yPosition - 1, contentX + contentWidth, yPosition - 1);
         yPosition += 8;
@@ -224,8 +223,14 @@ export async function POST(request: NextRequest) {
           }
           addText(edu.degree || '', contentX + 30, yPosition, { fontSize: 9, fontStyle: 'bold' });
           yPosition += 5;
-          addText(edu.school || '', contentX + 30, yPosition, { fontSize: 9, color: '#666666' });
-          yPosition += 8;
+          
+          // Only show school if not already in degree
+          if (edu.school && !(edu.degree && edu.degree.toLowerCase().includes(edu.school.toLowerCase()))) {
+            addText(edu.school, contentX + 30, yPosition, { fontSize: 9, color: '#666666' });
+            yPosition += 8;
+          } else {
+            yPosition += 3;
+          }
         });
         yPosition += 5;
       }
@@ -279,32 +284,37 @@ export async function POST(request: NextRequest) {
         }
 
         addText('COMPÉTENCES', contentX, yPosition, { fontSize: 13, fontStyle: 'bold', color: '#333333' });
-        doc.line(contentX + 40, yPosition - 1, contentX + contentWidth, yPosition - 1);
+        doc.line(contentX + 35, yPosition - 1, contentX + contentWidth, yPosition - 1);
         yPosition += 10;
 
         const colWidth = contentWidth / 2;
         const skillsSectionY = yPosition;
         
+        // Languages
         let languagesY = skillsSectionY;
         if (languages.length > 0) {
           addText('LANGUES', contentX, languagesY, { fontSize: 9, fontStyle: 'bold' });
           languagesY += 6;
           languages.forEach((lang: any) => {
-            addText(`${lang.name}: ${lang.level}`, contentX, languagesY, { fontSize: 8.5 });
+            addText(`${lang.name}`, contentX, languagesY, { fontSize: 8 });
+            const levelX = contentX + doc.getTextWidth(lang.name) + 2;
+            addText(`: ${lang.level}`, levelX, languagesY, { fontSize: 8, color: '#666666' });
             languagesY += 5;
           });
         }
 
+        // Software Skills
         let softwareY = skillsSectionY;
         if (skills.length > 0) {
           addText('LOGICIELS MAÎTRISÉS', contentX + colWidth, softwareY, { fontSize: 9, fontStyle: 'bold' });
           softwareY += 6;
           skills.forEach((skill: any) => {
             const skillName = skill.name || skill;
-            addText(`• ${skillName}`, contentX + colWidth, softwareY, { fontSize: 8.5 });
+            addText(`• ${skillName}`, contentX + colWidth, softwareY, { fontSize: 8, maxWidth: colWidth - 5 });
             softwareY += 5;
           });
         }
+        
         yPosition = Math.max(languagesY, softwareY) + 10;
       }
     }
