@@ -986,7 +986,7 @@ function PricingPage() {
 // ============================================
 // A4 CV PREVIEW COMPONENT
 // ============================================
-function CVPreviewA4({ cvDataJson, primaryColor }: { cvDataJson: string, primaryColor: string }) {
+function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: string, primaryColor: string, template: string }) {
   let data: any = null;
   try {
     data = JSON.parse(cvDataJson);
@@ -995,198 +995,282 @@ function CVPreviewA4({ cvDataJson, primaryColor }: { cvDataJson: string, primary
     return <div className="bg-muted rounded-lg p-4 text-sm whitespace-pre-wrap max-h-[800px] overflow-y-auto">{cvDataJson}</div>;
   }
 
-  if (data._rawText) {
-    return <div className="bg-muted rounded-lg p-4 text-sm whitespace-pre-wrap max-h-[800px] overflow-y-auto">{data._rawText}</div>;
-  }
-
   const { header, summary, experiences, educations, skills, languages, interests } = data;
+  const isDoubleColumn = template === 'modern' || template === 'elegant' || template === 'creative';
 
   return (
     <div className="flex justify-center bg-gray-100 p-4 overflow-x-auto rounded-lg">
       <div
-        className="bg-white shadow-xl mx-auto flex overflow-hidden relative shrink-0"
+        className="bg-white shadow-xl mx-auto flex flex-col md:flex-row overflow-hidden relative shrink-0"
         style={{
           width: '210mm',
           minHeight: '297mm', // A4 aspect ratio 
-          // Scale it down visually without breaking layout internally
           transform: 'scale(0.85)',
           transformOrigin: 'top center',
           marginBottom: '-15%'
         }}
       >
-        {/* Left Sidebar */}
-        <div
-          className="w-[35%] p-8 pt-12 flex flex-col text-white"
-          style={{ backgroundColor: primaryColor }}
-        >
-          {/* Photo placeholder (optional) */}
-          <div className="w-32 h-32 rounded-full bg-white/20 mx-auto mb-8 flex items-center justify-center border-4 border-white/30 overflow-hidden">
-            <User className="w-16 h-16 text-white/50" />
-          </div>
+        {isDoubleColumn ? (
+          <>
+            {/* Left Sidebar */}
+            <div
+              className="w-[35%] p-8 pt-12 flex flex-col text-white"
+              style={{ backgroundColor: primaryColor }}
+            >
+              <div className="w-32 h-32 rounded-full bg-white/20 mx-auto mb-8 flex items-center justify-center border-4 border-white/30 overflow-hidden">
+                <User className="w-16 h-16 text-white/50" />
+              </div>
 
-          <div className="mb-10">
-            <h3 className="text-xl font-medium tracking-[0.2em] mb-4 text-white uppercase bg-white/10 p-2 text-center rounded">Profil</h3>
-            <p className="text-sm leading-relaxed text-blue-50/90 text-justify">
-              {summary || "Déterminé, sérieux, autonome et conscient du travail qui m'attend, je suis persuadé que je serais un élément moteur au sein de votre structure !"}
-            </p>
-          </div>
+              <div className="mb-10">
+                <h3 className="text-xl font-medium tracking-[0.2em] mb-4 text-white uppercase bg-white/10 p-2 text-center rounded">Profil</h3>
+                <p className="text-sm leading-relaxed text-blue-50/90 text-justify">
+                  {summary || "Déterminé, sérieux, autonome et conscient du travail qui m'attend."}
+                </p>
+              </div>
 
-          <div className="mb-10 text-sm">
-            <h3 className="text-xl font-medium tracking-[0.2em] mb-4 text-white uppercase bg-white/10 p-2 text-center rounded">Contact</h3>
-            <div className="space-y-4">
-              {header?.location && (
-                <div className="flex items-start gap-4">
-                  <MapPin className="w-5 h-5 shrink-0 mt-0.5 opacity-80" />
-                  <span className="leading-tight opacity-90">{header.location}</span>
+              <div className="mb-10 text-sm">
+                <h3 className="text-xl font-medium tracking-[0.2em] mb-4 text-white uppercase bg-white/10 p-2 text-center rounded">Contact</h3>
+                <div className="space-y-4">
+                  {(header?.location || header?.address) && (
+                    <div className="flex items-start gap-4">
+                      <MapPin className="w-5 h-5 shrink-0 mt-0.5 opacity-80" />
+                      <span className="leading-tight opacity-90">{header.location || header.address}</span>
+                    </div>
+                  )}
+                  {header?.email && (
+                    <div className="flex items-center gap-4">
+                      <Mail className="w-5 h-5 shrink-0 opacity-80" />
+                      <span className="leading-tight opacity-90 break-all">{header.email}</span>
+                    </div>
+                  )}
+                  {header?.phone && (
+                    <div className="flex items-center gap-4">
+                      <Phone className="w-5 h-5 shrink-0 opacity-80" />
+                      <span className="leading-tight opacity-90">{header.phone}</span>
+                    </div>
+                  )}
+                  {header?.linkedin && (
+                    <div className="flex items-center gap-4">
+                      <Globe className="w-5 h-5 shrink-0 opacity-80" />
+                      <span className="leading-tight opacity-90 truncate">{header.linkedin}</span>
+                    </div>
+                  )}
                 </div>
-              )}
-              {header?.email && (
-                <div className="flex items-center gap-4">
-                  <Mail className="w-5 h-5 shrink-0 opacity-80" />
-                  <span className="leading-tight opacity-90 break-all">{header.email}</span>
-                </div>
-              )}
-              {header?.phone && (
-                <div className="flex items-center gap-4">
-                  <Phone className="w-5 h-5 shrink-0 opacity-80" />
-                  <span className="leading-tight opacity-90">{header.phone}</span>
-                </div>
-              )}
-              {header?.linkedin && (
-                <div className="flex items-center gap-4">
-                  <Globe className="w-5 h-5 shrink-0 opacity-80" />
-                  <span className="leading-tight opacity-90 truncate">{header.linkedin}</span>
+              </div>
+
+              {interests && interests.length > 0 && (
+                <div className="mb-10">
+                  <h3 className="text-xl font-medium tracking-[0.2em] mb-6 text-white uppercase bg-white/10 p-2 text-center rounded">Intérêts</h3>
+                  <div className="space-y-4">
+                    {interests.map((int: string, i: number) => (
+                      <div key={i} className="flex items-center gap-4">
+                        <Star className="w-5 h-5 opacity-80" />
+                        <span className="text-sm opacity-90">{int}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          </div>
 
-          {interests && interests.length > 0 && (
-            <div className="mb-10">
-              <h3 className="text-xl font-medium tracking-[0.2em] mb-6 text-white uppercase bg-white/10 p-2 text-center rounded">Intérêts</h3>
-              <div className="space-y-4">
-                {interests.map((int: string, i: number) => (
-                  <div key={i} className="flex items-center gap-4">
-                    <Star className="w-5 h-5 opacity-80" />
-                    <span className="text-sm opacity-90">{int}</span>
+            {/* Right Main Content */}
+            <div className="w-[65%] p-10 pt-16 pr-12 text-gray-800 flex flex-col">
+              <div className="mb-12">
+                <h1 className="text-5xl font-light text-gray-800 tracking-wider mb-3 leading-tight uppercase relative inline-block">
+                  {header?.fullName?.split(' ')[0] || 'Nom'}{' '}
+                  <span className="font-semibold">{header?.fullName?.split(' ').slice(1).join(' ') || 'Prénom'}</span>
+                </h1>
+                <h2 className="text-xl tracking-[0.3em] font-medium text-gray-500 uppercase">
+                  {header?.targetJobTitle || 'Titre du poste'}
+                </h2>
+              </div>
+
+              <div className="flex-1 space-y-10">
+                {educations && educations.length > 0 && (
+                  <section>
+                    <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
+                      Formation
+                      <div className="h-px flex-1 bg-gray-300"></div>
+                    </h3>
+                    <div className="space-y-3">
+                      {educations.map((edu: any, i: number) => (
+                        <div key={i} className="text-sm leading-relaxed">
+                          <span className="font-bold text-gray-900">{edu.period || `${edu.startDate} - ${edu.endDate}`}</span>
+                          <span className="mx-2 text-gray-400">-</span>
+                          <span className="font-semibold text-gray-800">{edu.degree}</span>
+                          <span className="mx-2 text-gray-400">-</span>
+                          <span className="text-gray-600">{edu.school}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {experiences && experiences.length > 0 && (
+                  <section>
+                    <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
+                      Expérience
+                      <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
+                      <div className="h-px flex-1 bg-gray-300"></div>
+                    </h3>
+                    <div className="space-y-8">
+                      {experiences.map((exp: any, i: number) => (
+                        <div key={i} className="flex gap-4">
+                          <div className="w-1/3 shrink-0">
+                            <div className="font-bold text-sm text-gray-900 mb-1">{exp.period || `${exp.startDate} - ${exp.endDate}`}</div>
+                            <div className="text-sm font-semibold text-gray-600">{exp.company}</div>
+                          </div>
+                          <div className="w-2/3">
+                            <h4 className="font-bold text-sm tracking-widest uppercase mb-3 text-gray-800">{exp.position}</h4>
+                            <ul className="list-disc pl-4 space-y-1.5 marker:text-gray-400 text-xs text-gray-600">
+                              {exp.achievements?.map((ach: string, j: number) => (
+                                <li key={j} className="leading-relaxed pl-1">{ach}</li>
+                              )) || <li className="leading-relaxed pl-1">{exp.description}</li>}
+                            </ul>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                <section className="mt-auto pt-8">
+                  <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
+                    Compétences
+                    <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
+                    <div className="h-px flex-1 bg-gray-300"></div>
+                  </h3>
+                  <div className="flex gap-12">
+                    {languages && languages.length > 0 && (
+                      <div className="flex-1">
+                        <h4 className="text-xs font-bold tracking-widest uppercase mb-4 text-gray-800">Langues</h4>
+                        <div className="space-y-2">
+                          {languages.map((lang: any, i: number) => (
+                            <div key={i} className="flex text-sm">
+                              <span className="w-24 text-gray-600 font-medium">{lang.name}</span>
+                              <span className="text-gray-400 mx-2">:</span>
+                              <span className="text-gray-800">{lang.level}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {skills && skills.length > 0 && (
+                      <div className="flex-1">
+                        <h4 className="text-xs font-bold tracking-widest uppercase mb-4 text-gray-800">Logiciels Maîtrisés</h4>
+                        <div className="space-y-2">
+                          {skills.map((skill: any, i: number) => (
+                            <div key={i} className="text-sm text-gray-600 flex items-center gap-3">
+                              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: primaryColor }}></div>
+                              {skill.name || skill}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                </section>
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Right Main Content */}
-        <div className="w-[65%] p-10 pt-16 pr-12 text-gray-800 flex flex-col">
-
-          {/* Header Name & Title */}
-          <div className="mb-12">
-            <h1 className="text-5xl font-light text-gray-800 tracking-wider mb-3 leading-tight uppercase relative inline-block">
-              {header?.fullName?.split(' ')[0] || 'Nom'}{' '}
-              <span className="font-semibold">{header?.fullName?.split(' ').slice(1).join(' ') || 'Prénom'}</span>
-            </h1>
-            <h2 className="text-xl tracking-[0.3em] font-medium text-gray-500 uppercase">
-              {header?.targetJobTitle || 'Titre du poste'}
-            </h2>
-          </div>
-
-          <div className="flex-1 space-y-10">
-            {/* Formation */}
-            {educations && educations.length > 0 && (
-              <section>
-                <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
-                  Formation
-                  <div className="h-px flex-1 bg-gray-300"></div>
-                </h3>
-                <div className="space-y-3">
-                  {educations.map((edu: any, i: number) => (
-                    <div key={i} className="text-sm leading-relaxed">
-                      <span className="font-bold text-gray-900">{edu.period}</span>
-                      <span className="mx-2 text-gray-400">-</span>
-                      <span className="font-semibold text-gray-800">{edu.degree}</span>
-                      <span className="mx-2 text-gray-400">-</span>
-                      <span className="text-gray-600">{edu.school}</span>
-                    </div>
-                  ))}
+          </>
+        ) : (
+          /* Single Column Layout (Minimal/Professional/Classic) */
+          <div className="w-full p-16 flex flex-col gap-12 text-gray-800">
+            {/* Minimal/Professional Header */}
+            <div>
+              <div className="flex justify-between items-baseline mb-4">
+                <h1 className="text-5xl font-bold tracking-tight text-gray-900">
+                  {header?.fullName || 'Votre Nom'}
+                </h1>
+                <div className="text-right text-gray-500 space-y-1">
+                  {header?.email && <div className="text-sm">{header.email}</div>}
+                  {header?.phone && <div className="text-sm">{header.phone}</div>}
+                  {header?.location && <div className="text-sm">{header.location}</div>}
                 </div>
+              </div>
+              <div className="h-1 w-full" style={{ backgroundColor: primaryColor }}></div>
+              <h2 className="text-2xl mt-4 font-medium text-gray-500 uppercase tracking-widest">
+                {header?.targetJobTitle || 'Titre du poste'}
+              </h2>
+            </div>
+
+            {/* Summary */}
+            {summary && (
+              <section className="space-y-4">
+                <h3 className="text-xl font-bold uppercase tracking-wider" style={{ color: primaryColor }}>Profil</h3>
+                <p className="text-gray-600 leading-relaxed text-lg italic border-l-4 pl-6" style={{ borderColor: primaryColor }}>
+                  {summary}
+                </p>
               </section>
             )}
 
             {/* Experience */}
             {experiences && experiences.length > 0 && (
-              <section>
-                <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
-                  Expérience
-                  <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
-                  <div className="h-px flex-1 bg-gray-300"></div>
-                </h3>
-                <div className="space-y-8">
+              <section className="space-y-8">
+                <h3 className="text-xl font-bold uppercase tracking-wider" style={{ color: primaryColor }}>Expérience Professionnelle</h3>
+                <div className="space-y-10">
                   {experiences.map((exp: any, i: number) => (
-                    <div key={i} className="flex gap-4">
-                      {/* Left Side: Dates & Company */}
-                      <div className="w-1/3 shrink-0">
-                        <div className="font-bold text-sm text-gray-900 mb-1">{exp.period}</div>
-                        <div className="text-sm font-semibold text-gray-600">{exp.company}</div>
+                    <div key={i} className="space-y-3">
+                      <div className="flex justify-between font-bold text-gray-900">
+                        <span className="text-xl">{exp.position}</span>
+                        <span className="text-gray-500 font-medium">{exp.period || `${exp.startDate} - ${exp.endDate}`}</span>
                       </div>
-                      {/* Right Side: Position & Achievements */}
-                      <div className="w-2/3">
-                        <h4 className="font-bold text-sm tracking-widest uppercase mb-3 text-gray-800">{exp.position}</h4>
-                        <ul className="list-disc pl-4 space-y-1.5 marker:text-gray-400">
-                          {exp.achievements?.map((ach: string, j: number) => (
-                            <li key={j} className="text-xs text-gray-600 leading-relaxed pl-1">{ach}</li>
-                          )) || <li className="text-xs text-gray-600 leading-relaxed pl-1">Description à compléter</li>}
-                        </ul>
-                      </div>
+                      <div className="text-lg font-semibold" style={{ color: primaryColor }}>{exp.company}</div>
+                      <ul className="list-disc pl-5 space-y-2 text-gray-600">
+                        {exp.achievements?.map((ach: string, j: number) => (
+                          <li key={j} className="leading-relaxed">{ach}</li>
+                        )) || <li className="leading-relaxed">{exp.description}</li>}
+                      </ul>
                     </div>
                   ))}
                 </div>
               </section>
             )}
 
-            {/* Compétences Bottom Area */}
-            <section className="mt-auto pt-8">
-              <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
-                Compétences
-                <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
-                <div className="h-px flex-1 bg-gray-300"></div>
-              </h3>
-
-              <div className="flex gap-12">
-                {/* Languages Col */}
-                {languages && languages.length > 0 && (
-                  <div className="flex-1">
-                    <h4 className="text-xs font-bold tracking-widest uppercase mb-4 text-gray-800">Langues</h4>
-                    <div className="space-y-2">
-                      {languages.map((lang: any, i: number) => (
-                        <div key={i} className="flex text-sm">
-                          <span className="w-24 text-gray-600">{lang.name}</span>
-                          <span className="text-gray-400 mx-2">:</span>
-                          <span className="text-gray-800">{lang.level}</span>
-                        </div>
-                      ))}
+            {/* Education */}
+            {educations && educations.length > 0 && (
+              <section className="space-y-6">
+                <h3 className="text-xl font-bold uppercase tracking-wider" style={{ color: primaryColor }}>Formation</h3>
+                <div className="space-y-4">
+                  {educations.map((edu: any, i: number) => (
+                    <div key={i} className="flex justify-between items-baseline border-b pb-2">
+                      <div>
+                        <span className="font-bold text-gray-900">{edu.degree}</span>
+                        <span className="mx-2 text-gray-400">|</span>
+                        <span className="text-gray-600">{edu.school}</span>
+                      </div>
+                      <span className="text-sm text-gray-500 font-medium">{edu.period || `${edu.startDate} - ${edu.endDate}`}</span>
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
+              </section>
+            )}
 
-                {/* Logiciels / Skills Col */}
-                {skills && skills.length > 0 && (
-                  <div className="flex-1">
-                    <h4 className="text-xs font-bold tracking-widest uppercase mb-4 text-gray-800">Logiciels Maîtrisés</h4>
-                    <div className="space-y-2">
-                      {skills.map((skill: string, i: number) => (
-                        <div key={i} className="text-sm text-gray-600 flex items-center gap-3">
-                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: primaryColor }}></div>
-                          {skill}
-                        </div>
-                      ))}
-                    </div>
+            {/* Bottom Row: Skills & Interests */}
+            <div className="grid grid-cols-2 gap-12 mt-auto">
+              {skills && skills.length > 0 && (
+                <section className="space-y-4">
+                  <h3 className="text-lg font-bold uppercase tracking-wider" style={{ color: primaryColor }}>Compétences</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {skills.map((skill: any, i: number) => (
+                      <span key={i} className="px-3 py-1 bg-gray-100 rounded text-gray-700 text-sm border-b-2" style={{ borderColor: primaryColor }}>
+                        {skill.name || skill}
+                      </span>
+                    ))}
                   </div>
-                )}
-              </div>
-            </section>
-
+                </section>
+              )}
+              {interests && interests.length > 0 && (
+                <section className="space-y-4">
+                  <h3 className="text-lg font-bold uppercase tracking-wider" style={{ color: primaryColor }}>Centres d'intérêt</h3>
+                  <p className="text-gray-600 text-sm leading-relaxed">
+                    {interests.join(' • ')}
+                  </p>
+                </section>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -1571,7 +1655,7 @@ function CVBuilderPage() {
                     <div className="flex items-center justify-between">
                       <Badge className="gradient-primary text-white">Score ATS: {cvScore}/100</Badge>
                     </div>
-                    <CVPreviewA4 cvDataJson={generatedCV} primaryColor={cvPrimaryColor} />
+                    <CVPreviewA4 cvDataJson={generatedCV} primaryColor={cvPrimaryColor} template={cvTemplate} />
                     <div className="space-y-2">
                       <Button className="w-full gap-2 gradient-primary text-white" onClick={handleDownloadPDF} disabled={isExporting}>
                         {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
