@@ -23,7 +23,8 @@ import {
   Award, BookOpen, Languages, Wrench,
   Menu, X, ArrowRight, Check, RefreshCw, CreditCard,
   Crown, Rocket, Shield, Palette, Layout, Paintbrush,
-  Upload, FileUp, Play, Pause, Filter, Wand2, ExternalLink
+  Upload, FileUp, Play, Pause, Filter, Wand2, ExternalLink,
+  Mail, Phone
 } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from '@/hooks/use-toast';
