@@ -15,15 +15,15 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { 
-  FileText, Search, Briefcase, Home, User, Plus, Trash2, 
+import {
+  FileText, Search, Briefcase, Home, User, Plus, Trash2,
   Download, Send, Eye, CheckCircle, XCircle, Clock, TrendingUp,
   Building2, MapPin, Calendar, DollarSign, Sparkles, Zap,
   Target, BarChart3, Settings, Bell, Star, Globe,
   Award, BookOpen, Languages, Wrench,
   Menu, X, ArrowRight, Check, RefreshCw, CreditCard,
   Crown, Rocket, Shield, Palette, Layout, Paintbrush,
-  Upload, FileUp, Play, Pause, Filter, Wand2
+  Upload, FileUp, Play, Pause, Filter, Wand2, ExternalLink
 } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from '@/hooks/use-toast';
@@ -47,10 +47,10 @@ function PaymentDialog({ plan, children }: { plan: typeof SUBSCRIPTION_PLANS[0];
     }
 
     setIsProcessing(true);
-    
+
     // Show toast immediately to indicate processing
     toast({ title: 'Connexion à Stripe...', description: 'Veuillez patienter quelques secondes.' });
-    
+
     try {
       // Call Stripe checkout API
       const response = await fetch('/api/stripe/checkout', {
@@ -79,9 +79,9 @@ function PaymentDialog({ plan, children }: { plan: typeof SUBSCRIPTION_PLANS[0];
         setOpen(false);
         setCurrentView('cv-builder');
         if (data.demo) {
-          toast({ 
-            title: 'Mode Démo', 
-            description: `${plan.name} activé. Configurez Stripe dans .env pour les vrais paiements.` 
+          toast({
+            title: 'Mode Démo',
+            description: `${plan.name} activé. Configurez Stripe dans .env pour les vrais paiements.`
           });
         } else {
           toast({ title: 'Abonnement activé !', description: `Votre plan ${plan.name} est maintenant actif.` });
@@ -97,9 +97,9 @@ function PaymentDialog({ plan, children }: { plan: typeof SUBSCRIPTION_PLANS[0];
       upgradePlan(plan.id);
       setOpen(false);
       setCurrentView('cv-builder');
-      toast({ 
-        title: 'Paiement simulé', 
-        description: `Mode démo: Abonnement ${plan.name} activé. Configurez Stripe pour les vrais paiements.` 
+      toast({
+        title: 'Paiement simulé',
+        description: `Mode démo: Abonnement ${plan.name} activé. Configurez Stripe pour les vrais paiements.`
       });
     } finally {
       setIsProcessing(false);
@@ -121,7 +121,7 @@ function PaymentDialog({ plan, children }: { plan: typeof SUBSCRIPTION_PLANS[0];
           </DialogTitle>
           <DialogDescription>{plan.description}</DialogDescription>
         </DialogHeader>
-        
+
         {plan.price > 0 && (
           <div className="space-y-4">
             <div className="flex rounded-lg border p-1">
@@ -153,7 +153,7 @@ function PaymentDialog({ plan, children }: { plan: typeof SUBSCRIPTION_PLANS[0];
             {isProcessing ? <><RefreshCw className="h-4 w-4 animate-spin mr-2" />Traitement...</> : plan.price === 0 ? 'Activer gratuitement' : <><CreditCard className="h-4 w-4 mr-2" />Payer {billingCycle === 'yearly' ? plan.priceYearly : plan.price}€</>}
           </Button>
         </div>
-        
+
         {plan.price > 0 && (
           <div className="flex items-center justify-center gap-2 pt-3 text-xs text-muted-foreground">
             <Shield className="h-3 w-3" />
@@ -162,6 +162,488 @@ function PaymentDialog({ plan, children }: { plan: typeof SUBSCRIPTION_PLANS[0];
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ============================================
+// JOB DETAILS DIALOG COMPONENT
+// ============================================
+function JobDetailsDialog({ job, onApply, children }: { job: any; onApply: () => void; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent className="max-w-[90vw] w-full h-[90vh] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <div>
+              <DialogTitle className="text-2xl">{job.title}</DialogTitle>
+              <DialogDescription className="text-lg mt-1 font-medium text-primary">
+                {job.company}
+              </DialogDescription>
+            </div>
+            {job.companyLogo && (
+              <img src={job.companyLogo} alt={job.company} className="h-12 w-12 rounded object-contain bg-white" />
+            )}
+          </div>
+        </DialogHeader>
+
+        <div className="flex flex-wrap gap-2 my-4">
+          {job.location && <Badge variant="secondary" className="gap-1"><MapPin className="h-3 w-3" />{job.location}</Badge>}
+          {job.remote && <Badge variant="secondary" className="gap-1"><Globe className="h-3 w-3" />Remote</Badge>}
+          {job.salary && job.salary !== 'Non spécifié' && (
+            <Badge variant="secondary" className="gap-1"><DollarSign className="h-3 w-3" />{job.salary}</Badge>
+          )}
+          <Badge variant="secondary" className="gap-1"><Building2 className="h-3 w-3" />{job.jobType}</Badge>
+        </div>
+
+        <div className="bg-muted/30 p-4 rounded-lg my-4">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-semibold text-sm">Match IA pour votre profil</h4>
+            <div className="text-xl font-bold text-accent">{job.matchScore}%</div>
+          </div>
+          <Progress value={job.matchScore} className="h-2" />
+        </div>
+
+        <div className="prose prose-sm dark:prose-invert max-w-none mb-6">
+          <h3 className="text-lg font-semibold mb-3">Description du poste</h3>
+          {job.htmlDescription ? (
+            <div
+              className="mt-4 space-y-4 text-muted-foreground"
+              dangerouslySetInnerHTML={{ __html: job.htmlDescription }}
+            />
+          ) : (
+            <p className="text-muted-foreground">{job.description}</p>
+          )}
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t mt-4 sticky bottom-0 bg-background/95 backdrop-blur py-4">
+          <Button
+            className="flex-1 gradient-primary text-white"
+            onClick={() => {
+              setOpen(false);
+              onApply();
+            }}
+          >
+            <Send className="h-4 w-4 mr-2" /> Postuler maintenant
+          </Button>
+          <Button variant="outline" className="flex-1" asChild>
+            <a href={job.sourceUrl} target="_blank" rel="noopener noreferrer">
+              Voir sur {job.source} <Eye className="h-4 w-4 ml-2" />
+            </a>
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================
+// APPLY WIZARD - Multi-step application flow (Indeed Smart Apply style)
+// ============================================
+function ApplyWizard({ job, onClose, onSubmit }: { job: any; onClose: () => void; onSubmit: (data: any) => void }) {
+  const { profile } = useAppStore();
+  const [currentStep, setCurrentStep] = useState(0);
+  const [formData, setFormData] = useState({
+    firstName: profile?.firstName || '',
+    lastName: profile?.lastName || '',
+    email: profile?.email || '',
+    phone: profile?.phone || '',
+    city: profile?.targetLocation || '',
+    postalCode: '',
+    cvFileName: '',
+    cvUploaded: false,
+    coverLetter: '',
+    coverLetterMode: 'ai' as 'ai' | 'manual' | 'none',
+    isGeneratingCL: false,
+  });
+
+  const steps = [
+    { title: 'Vos informations', progress: 25 },
+    { title: 'Votre CV', progress: 50 },
+    { title: 'Lettre de motivation', progress: 75 },
+    { title: 'Vérification', progress: 100 },
+  ];
+
+  const updateField = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const canContinue = () => {
+    if (currentStep === 0) return formData.firstName && formData.lastName && formData.email;
+    if (currentStep === 1) return true; // CV is optional
+    if (currentStep === 2) return true; // Cover letter is optional
+    return true;
+  };
+
+  const handleGenerateCoverLetter = async () => {
+    updateField('isGeneratingCL', true);
+    try {
+      const response = await fetch('/api/applications/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id, profile, skills: [], jobOffer: job, generateOnly: true }),
+      });
+      const data = await response.json();
+      updateField('coverLetter', data.coverLetter || `Madame, Monsieur,\n\nJe me permets de vous adresser ma candidature pour le poste de ${job.title} au sein de ${job.company}.\n\nFort(e) d'une expérience significative, je suis convaincu(e) que mes compétences correspondent à vos attentes. Je serais ravi(e) d'échanger avec vous pour discuter de cette opportunité.\n\nCordialement,\n${formData.firstName} ${formData.lastName}`);
+    } catch {
+      updateField('coverLetter', `Madame, Monsieur,\n\nJe me permets de vous adresser ma candidature pour le poste de ${job.title} au sein de ${job.company}.\n\nFort(e) d'une expérience significative, je suis convaincu(e) que mes compétences correspondent à vos attentes. Je serais ravi(e) d'échanger avec vous pour discuter de cette opportunité.\n\nCordialement,\n${formData.firstName} ${formData.lastName}`);
+    } finally {
+      updateField('isGeneratingCL', false);
+    }
+  };
+
+  const handleSubmit = () => {
+    onSubmit(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-[#f3f2f1]">
+      {/* Header */}
+      <div className="bg-white border-b">
+        <div className="container mx-auto max-w-7xl px-4 flex items-center justify-between h-14">
+          <div className="flex items-center gap-4">
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-800 transition-colors">
+              <X className="h-5 w-5" />
+            </button>
+            <span className="font-semibold text-gray-900 text-sm hidden sm:block">{job.title}</span>
+          </div>
+          <button onClick={onClose} className="text-[#2557a7] font-medium text-sm hover:underline">
+            Enregistrer et fermer
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="container mx-auto max-w-6xl px-4 py-8">
+        <div className="lg:grid lg:grid-cols-[1fr_380px] gap-8">
+          {/* Left - Form */}
+          <div className="bg-white rounded-lg border shadow-sm p-8 mb-6 lg:mb-0">
+            {/* Progress Bar */}
+            <div className="mb-8">
+              <div className="flex justify-between items-center mb-2">
+                {currentStep > 0 && (
+                  <button onClick={() => setCurrentStep(currentStep - 1)} className="text-gray-500 hover:text-gray-800">
+                    <ArrowRight className="h-5 w-5 rotate-180" />
+                  </button>
+                )}
+                <span className="text-sm text-gray-500 ml-auto">{steps[currentStep].progress} %</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                <div
+                  className="h-1.5 rounded-full transition-all duration-500"
+                  style={{ width: `${steps[currentStep].progress}%`, backgroundColor: '#2557a7' }}
+                />
+              </div>
+            </div>
+
+            {/* Step 1: Contact Info */}
+            {currentStep === 0 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Vérifiez vos informations</h2>
+                  <p className="text-sm text-gray-500">
+                    En précisant vos informations, vous aidez les employeurs à vous contacter rapidement.
+                    Les champs obligatoires sont marqués d'un astérisque (<span className="text-red-500">*</span>).
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-semibold text-gray-700">Prénom <span className="text-red-500">*</span></Label>
+                    <Input
+                      className="mt-1.5 h-11"
+                      value={formData.firstName}
+                      onChange={(e) => updateField('firstName', e.target.value)}
+                      placeholder="Votre prénom"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-semibold text-gray-700">Nom <span className="text-red-500">*</span></Label>
+                    <Input
+                      className="mt-1.5 h-11"
+                      value={formData.lastName}
+                      onChange={(e) => updateField('lastName', e.target.value)}
+                      placeholder="Votre nom"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-semibold text-gray-700">Email <span className="text-red-500">*</span></Label>
+                  <Input
+                    className="mt-1.5 h-11"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => updateField('email', e.target.value)}
+                    placeholder="votre@email.com"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-sm font-semibold text-gray-700">Téléphone</Label>
+                  <Input
+                    className="mt-1.5 h-11"
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => updateField('phone', e.target.value)}
+                    placeholder="+33 6 12 34 56 78"
+                  />
+                </div>
+
+                <Separator />
+
+                <div>
+                  <Label className="text-sm font-semibold text-gray-700">Ville</Label>
+                  <Input
+                    className="mt-1.5 h-11"
+                    value={formData.city}
+                    onChange={(e) => updateField('city', e.target.value)}
+                    placeholder="Paris, Lyon, Remote..."
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-sm font-semibold text-gray-700">Code postal</Label>
+                  <Input
+                    className="mt-1.5 h-11"
+                    value={formData.postalCode}
+                    onChange={(e) => updateField('postalCode', e.target.value)}
+                    placeholder="75001"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: CV */}
+            {currentStep === 1 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Ajoutez un CV pour l'employeur</h2>
+                  <p className="text-sm text-gray-500">Un CV augmente vos chances d'être contacté par le recruteur.</p>
+                </div>
+
+                {formData.cvUploaded ? (
+                  <div className="border-2 border-[#2557a7] rounded-lg p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-blue-50 p-2.5 rounded-lg">
+                        <FileText className="h-6 w-6 text-[#2557a7]" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">{formData.cvFileName}</p>
+                        <p className="text-xs text-gray-500">Importé le {new Date().toLocaleDateString('fr-FR')}</p>
+                      </div>
+                      <CheckCircle className="h-6 w-6 text-[#2557a7]" />
+                    </div>
+                  </div>
+                ) : (
+                  <label className="border-2 border-dashed border-gray-300 rounded-lg p-8 flex flex-col items-center gap-3 cursor-pointer hover:border-[#2557a7] hover:bg-blue-50/30 transition-all">
+                    <div className="bg-gray-100 p-3 rounded-full">
+                      <Upload className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-[#2557a7]">Télécharger un CV</p>
+                      <p className="text-xs text-gray-400 mt-1">PDF, DOC, DOCX — Max 5 Mo</p>
+                    </div>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          updateField('cvFileName', file.name);
+                          updateField('cvUploaded', true);
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+
+                {formData.cvUploaded && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-[#2557a7]"
+                    onClick={() => { updateField('cvUploaded', false); updateField('cvFileName', ''); }}
+                  >
+                    Changer de CV
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Step 3: Cover Letter */}
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Lettre de motivation</h2>
+                  <p className="text-sm text-gray-500">Personnalisez votre candidature avec une lettre adaptée au poste.</p>
+                </div>
+
+                <div className="space-y-3">
+                  {(['ai', 'manual', 'none'] as const).map((mode) => (
+                    <div
+                      key={mode}
+                      className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${formData.coverLetterMode === mode ? 'border-[#2557a7] bg-blue-50/30' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      onClick={() => updateField('coverLetterMode', mode)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.coverLetterMode === mode ? 'border-[#2557a7]' : 'border-gray-300'
+                          }`}>
+                          {formData.coverLetterMode === mode && <div className="w-2.5 h-2.5 rounded-full bg-[#2557a7]" />}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {mode === 'ai' && '✨ Générer avec l\'IA'}
+                            {mode === 'manual' && '✍️ Écrire manuellement'}
+                            {mode === 'none' && '⏭️ Passer cette étape'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {mode === 'ai' && 'Laissez notre IA rédiger une lettre adaptée au poste'}
+                            {mode === 'manual' && 'Rédigez votre propre lettre de motivation'}
+                            {mode === 'none' && 'Ne pas inclure de lettre de motivation'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {formData.coverLetterMode === 'ai' && (
+                  <div className="space-y-3">
+                    {!formData.coverLetter ? (
+                      <Button
+                        className="w-full h-12 text-base font-semibold rounded-lg"
+                        style={{ backgroundColor: '#2557a7', color: 'white' }}
+                        onClick={handleGenerateCoverLetter}
+                        disabled={formData.isGeneratingCL}
+                      >
+                        {formData.isGeneratingCL ? (
+                          <><RefreshCw className="h-5 w-5 animate-spin mr-2" /> Génération en cours...</>
+                        ) : (
+                          <><Sparkles className="h-5 w-5 mr-2" /> Générer ma lettre</>
+                        )}
+                      </Button>
+                    ) : (
+                      <Textarea
+                        className="min-h-[200px] text-sm"
+                        value={formData.coverLetter}
+                        onChange={(e) => updateField('coverLetter', e.target.value)}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {formData.coverLetterMode === 'manual' && (
+                  <Textarea
+                    className="min-h-[200px] text-sm"
+                    placeholder="Rédigez votre lettre de motivation..."
+                    value={formData.coverLetter}
+                    onChange={(e) => updateField('coverLetter', e.target.value)}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Step 4: Review */}
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Vérifiez votre candidature</h2>
+                  <p className="text-sm text-gray-500">Assurez-vous que toutes les informations sont correctes avant d'envoyer.</p>
+                </div>
+
+                {/* Contact summary */}
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2"><User className="h-4 w-4" /> Informations de contact</h3>
+                    <button onClick={() => setCurrentStep(0)} className="text-[#2557a7] text-sm font-medium hover:underline">Modifier</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                    <p><span className="font-medium text-gray-800">Nom :</span> {formData.firstName} {formData.lastName}</p>
+                    <p><span className="font-medium text-gray-800">Email :</span> {formData.email}</p>
+                    <p><span className="font-medium text-gray-800">Tél :</span> {formData.phone || 'Non renseigné'}</p>
+                    <p><span className="font-medium text-gray-800">Ville :</span> {formData.city || 'Non renseignée'}</p>
+                  </div>
+                </div>
+
+                {/* CV summary */}
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2"><FileText className="h-4 w-4" /> CV</h3>
+                    <button onClick={() => setCurrentStep(1)} className="text-[#2557a7] text-sm font-medium hover:underline">Modifier</button>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {formData.cvUploaded ? (
+                      <span className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-600" /> {formData.cvFileName}</span>
+                    ) : (
+                      <span className="text-gray-400">Aucun CV ajouté</span>
+                    )}
+                  </p>
+                </div>
+
+                {/* Cover letter summary */}
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2"><FileUp className="h-4 w-4" /> Lettre de motivation</h3>
+                    <button onClick={() => setCurrentStep(2)} className="text-[#2557a7] text-sm font-medium hover:underline">Modifier</button>
+                  </div>
+                  {formData.coverLetter ? (
+                    <p className="text-sm text-gray-600 line-clamp-4 whitespace-pre-wrap">{formData.coverLetter}</p>
+                  ) : (
+                    <p className="text-sm text-gray-400">Pas de lettre de motivation</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Navigation buttons */}
+            <div className="mt-8">
+              {currentStep < 3 ? (
+                <Button
+                  className="w-full h-12 text-base font-semibold rounded-lg"
+                  style={{ backgroundColor: '#2557a7', color: 'white' }}
+                  onClick={() => setCurrentStep(currentStep + 1)}
+                  disabled={!canContinue()}
+                >
+                  Continuer
+                </Button>
+              ) : (
+                <Button
+                  className="w-full h-14 text-lg font-semibold rounded-lg"
+                  style={{ backgroundColor: '#2557a7', color: 'white' }}
+                  onClick={handleSubmit}
+                >
+                  <Send className="h-5 w-5 mr-2" /> Envoyer votre candidature
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Right - Job Summary (Desktop) */}
+          <div className="hidden lg:block">
+            <div className="bg-white rounded-lg border shadow-sm p-6 sticky top-20">
+              <h3 className="font-bold text-gray-900 mb-1">{job.title}</h3>
+              <p className="text-sm text-gray-500 mb-4">{job.company} — {job.location}</p>
+
+              {job.htmlDescription ? (
+                <div className="text-sm text-gray-600 line-clamp-6" dangerouslySetInnerHTML={{ __html: job.htmlDescription }} />
+              ) : (
+                <p className="text-sm text-gray-600 line-clamp-6">{job.description}</p>
+              )}
+
+              <button className="text-[#2557a7] text-sm font-medium mt-3 hover:underline flex items-center gap-1">
+                Afficher la description complète du poste
+                <ArrowRight className="h-3.5 w-3.5 rotate-90" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -501,17 +983,226 @@ function PricingPage() {
 }
 
 // ============================================
+// A4 CV PREVIEW COMPONENT
+// ============================================
+function CVPreviewA4({ cvDataJson, primaryColor }: { cvDataJson: string, primaryColor: string }) {
+  let data: any = null;
+  try {
+    data = JSON.parse(cvDataJson);
+  } catch (e) {
+    // Fallback if not JSON
+    return <div className="bg-muted rounded-lg p-4 text-sm whitespace-pre-wrap max-h-[800px] overflow-y-auto">{cvDataJson}</div>;
+  }
+
+  if (data._rawText) {
+    return <div className="bg-muted rounded-lg p-4 text-sm whitespace-pre-wrap max-h-[800px] overflow-y-auto">{data._rawText}</div>;
+  }
+
+  const { header, summary, experiences, educations, skills, languages, interests } = data;
+
+  return (
+    <div className="flex justify-center bg-gray-100 p-4 overflow-x-auto rounded-lg">
+      <div
+        className="bg-white shadow-xl mx-auto flex overflow-hidden relative shrink-0"
+        style={{
+          width: '210mm',
+          minHeight: '297mm', // A4 aspect ratio 
+          // Scale it down visually without breaking layout internally
+          transform: 'scale(0.85)',
+          transformOrigin: 'top center',
+          marginBottom: '-15%'
+        }}
+      >
+        {/* Left Sidebar */}
+        <div
+          className="w-[35%] p-8 pt-12 flex flex-col text-white"
+          style={{ backgroundColor: primaryColor }}
+        >
+          {/* Photo placeholder (optional) */}
+          <div className="w-32 h-32 rounded-full bg-white/20 mx-auto mb-8 flex items-center justify-center border-4 border-white/30 overflow-hidden">
+            <User className="w-16 h-16 text-white/50" />
+          </div>
+
+          <div className="mb-10">
+            <h3 className="text-xl font-medium tracking-[0.2em] mb-4 text-white uppercase bg-white/10 p-2 text-center rounded">Profil</h3>
+            <p className="text-sm leading-relaxed text-blue-50/90 text-justify">
+              {summary || "Déterminé, sérieux, autonome et conscient du travail qui m'attend, je suis persuadé que je serais un élément moteur au sein de votre structure !"}
+            </p>
+          </div>
+
+          <div className="mb-10 text-sm">
+            <h3 className="text-xl font-medium tracking-[0.2em] mb-4 text-white uppercase bg-white/10 p-2 text-center rounded">Contact</h3>
+            <div className="space-y-4">
+              {header?.location && (
+                <div className="flex items-start gap-4">
+                  <MapPin className="w-5 h-5 shrink-0 mt-0.5 opacity-80" />
+                  <span className="leading-tight opacity-90">{header.location}</span>
+                </div>
+              )}
+              {header?.email && (
+                <div className="flex items-center gap-4">
+                  <Mail className="w-5 h-5 shrink-0 opacity-80" />
+                  <span className="leading-tight opacity-90 break-all">{header.email}</span>
+                </div>
+              )}
+              {header?.phone && (
+                <div className="flex items-center gap-4">
+                  <Phone className="w-5 h-5 shrink-0 opacity-80" />
+                  <span className="leading-tight opacity-90">{header.phone}</span>
+                </div>
+              )}
+              {header?.linkedin && (
+                <div className="flex items-center gap-4">
+                  <Globe className="w-5 h-5 shrink-0 opacity-80" />
+                  <span className="leading-tight opacity-90 truncate">{header.linkedin}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {interests && interests.length > 0 && (
+            <div className="mb-10">
+              <h3 className="text-xl font-medium tracking-[0.2em] mb-6 text-white uppercase bg-white/10 p-2 text-center rounded">Intérêts</h3>
+              <div className="space-y-4">
+                {interests.map((int: string, i: number) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Star className="w-5 h-5 opacity-80" />
+                    <span className="text-sm opacity-90">{int}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Main Content */}
+        <div className="w-[65%] p-10 pt-16 pr-12 text-gray-800 flex flex-col">
+
+          {/* Header Name & Title */}
+          <div className="mb-12">
+            <h1 className="text-5xl font-light text-gray-800 tracking-wider mb-3 leading-tight uppercase relative inline-block">
+              {header?.fullName?.split(' ')[0] || 'Nom'}{' '}
+              <span className="font-semibold">{header?.fullName?.split(' ').slice(1).join(' ') || 'Prénom'}</span>
+            </h1>
+            <h2 className="text-xl tracking-[0.3em] font-medium text-gray-500 uppercase">
+              {header?.targetJobTitle || 'Titre du poste'}
+            </h2>
+          </div>
+
+          <div className="flex-1 space-y-10">
+            {/* Formation */}
+            {educations && educations.length > 0 && (
+              <section>
+                <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
+                  Formation
+                  <div className="h-px flex-1 bg-gray-300"></div>
+                </h3>
+                <div className="space-y-3">
+                  {educations.map((edu: any, i: number) => (
+                    <div key={i} className="text-sm leading-relaxed">
+                      <span className="font-bold text-gray-900">{edu.period}</span>
+                      <span className="mx-2 text-gray-400">-</span>
+                      <span className="font-semibold text-gray-800">{edu.degree}</span>
+                      <span className="mx-2 text-gray-400">-</span>
+                      <span className="text-gray-600">{edu.school}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Experience */}
+            {experiences && experiences.length > 0 && (
+              <section>
+                <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
+                  Expérience
+                  <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
+                  <div className="h-px flex-1 bg-gray-300"></div>
+                </h3>
+                <div className="space-y-8">
+                  {experiences.map((exp: any, i: number) => (
+                    <div key={i} className="flex gap-4">
+                      {/* Left Side: Dates & Company */}
+                      <div className="w-1/3 shrink-0">
+                        <div className="font-bold text-sm text-gray-900 mb-1">{exp.period}</div>
+                        <div className="text-sm font-semibold text-gray-600">{exp.company}</div>
+                      </div>
+                      {/* Right Side: Position & Achievements */}
+                      <div className="w-2/3">
+                        <h4 className="font-bold text-sm tracking-widest uppercase mb-3 text-gray-800">{exp.position}</h4>
+                        <ul className="list-disc pl-4 space-y-1.5 marker:text-gray-400">
+                          {exp.achievements?.map((ach: string, j: number) => (
+                            <li key={j} className="text-xs text-gray-600 leading-relaxed pl-1">{ach}</li>
+                          )) || <li className="text-xs text-gray-600 leading-relaxed pl-1">Description à compléter</li>}
+                        </ul>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Compétences Bottom Area */}
+            <section className="mt-auto pt-8">
+              <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
+                Compétences
+                <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
+                <div className="h-px flex-1 bg-gray-300"></div>
+              </h3>
+
+              <div className="flex gap-12">
+                {/* Languages Col */}
+                {languages && languages.length > 0 && (
+                  <div className="flex-1">
+                    <h4 className="text-xs font-bold tracking-widest uppercase mb-4 text-gray-800">Langues</h4>
+                    <div className="space-y-2">
+                      {languages.map((lang: any, i: number) => (
+                        <div key={i} className="flex text-sm">
+                          <span className="w-24 text-gray-600">{lang.name}</span>
+                          <span className="text-gray-400 mx-2">:</span>
+                          <span className="text-gray-800">{lang.level}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Logiciels / Skills Col */}
+                {skills && skills.length > 0 && (
+                  <div className="flex-1">
+                    <h4 className="text-xs font-bold tracking-widest uppercase mb-4 text-gray-800">Logiciels Maîtrisés</h4>
+                    <div className="space-y-2">
+                      {skills.map((skill: string, i: number) => (
+                        <div key={i} className="text-sm text-gray-600 flex items-center gap-3">
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: primaryColor }}></div>
+                          {skill}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
 // CV BUILDER PAGE
 // ============================================
 function CVBuilderPage() {
-  const { 
-    profile, setProfile, 
-    experiences, addExperience, removeExperience, 
-    educations, addEducation, removeEducation, 
-    certifications, addCertification, removeCertification, 
-    languages, addLanguage, removeLanguage, 
-    skills, addSkill, removeSkill, 
-    generatedCV, setGeneratedCV, 
+  const {
+    profile, setProfile,
+    experiences, addExperience, removeExperience,
+    educations, addEducation, removeEducation,
+    certifications, addCertification, removeCertification,
+    languages, addLanguage, removeLanguage,
+    skills, addSkill, removeSkill,
+    generatedCV, setGeneratedCV,
     canGenerateCV, incrementCVGeneration,
     cvTemplate, setCvTemplate,
     cvPrimaryColor, setCvPrimaryColor
@@ -526,7 +1217,7 @@ function CVBuilderPage() {
       toast({ title: 'Limite atteinte', description: 'Passez à un plan supérieur pour générer plus de CV.', variant: 'destructive' });
       return;
     }
-    
+
     setIsGenerating(true);
     try {
       // Call the real API
@@ -535,9 +1226,9 @@ function CVBuilderPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profile, experiences, educations, certifications, languages, skills }),
       });
-      
+
       if (!response.ok) throw new Error('Erreur lors de la génération');
-      
+
       const data = await response.json();
       incrementCVGeneration();
       setGeneratedCV(data.cv);
@@ -556,16 +1247,16 @@ function CVBuilderPage() {
       const response = await fetch('/api/cv/export-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           profile, experiences, educations, certifications, languages, skills,
           template: cvTemplate,
           primaryColor: cvPrimaryColor,
           generatedCV
         }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.pdf) {
         // Create download link
         const link = document.createElement('a');
@@ -803,16 +1494,15 @@ function CVBuilderPage() {
                     <button
                       key={t.id}
                       onClick={() => setCvTemplate(t.id)}
-                      className={`relative rounded-lg border-2 p-2 transition-all ${
-                        cvTemplate === t.id 
-                          ? 'border-primary ring-2 ring-primary/20' 
-                          : 'border-muted hover:border-primary/50'
-                      }`}
+                      className={`relative rounded-lg border-2 p-2 transition-all ${cvTemplate === t.id
+                        ? 'border-primary ring-2 ring-primary/20'
+                        : 'border-muted hover:border-primary/50'
+                        }`}
                     >
-                      <div 
+                      <div
                         className="aspect-[3/4] rounded bg-gradient-to-br from-gray-100 to-gray-200 mb-1"
-                        style={{ 
-                          background: t.id === 'creative' 
+                        style={{
+                          background: t.id === 'creative'
                             ? `linear-gradient(135deg, ${t.primaryColor}20 0%, ${t.primaryColor}40 100%)`
                             : `linear-gradient(180deg, ${t.primaryColor}30 0%, transparent 40%)`
                         }}
@@ -855,11 +1545,10 @@ function CVBuilderPage() {
                     <button
                       key={c.value}
                       onClick={() => setCvPrimaryColor(c.value)}
-                      className={`w-8 h-8 rounded-full transition-all ${
-                        cvPrimaryColor === c.value 
-                          ? 'ring-2 ring-offset-2 ring-primary scale-110' 
-                          : 'hover:scale-105'
-                      }`}
+                      className={`w-8 h-8 rounded-full transition-all ${cvPrimaryColor === c.value
+                        ? 'ring-2 ring-offset-2 ring-primary scale-110'
+                        : 'hover:scale-105'
+                        }`}
                       style={{ backgroundColor: c.value }}
                       title={c.name}
                     >
@@ -881,7 +1570,7 @@ function CVBuilderPage() {
                     <div className="flex items-center justify-between">
                       <Badge className="gradient-primary text-white">Score ATS: {cvScore}/100</Badge>
                     </div>
-                    <div className="bg-muted rounded-lg p-4 text-sm whitespace-pre-wrap max-h-80 overflow-y-auto">{generatedCV}</div>
+                    <CVPreviewA4 cvDataJson={generatedCV} primaryColor={cvPrimaryColor} />
                     <div className="space-y-2">
                       <Button className="w-full gap-2 gradient-primary text-white" onClick={handleDownloadPDF} disabled={isExporting}>
                         {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -988,6 +1677,18 @@ function JobSearchPage() {
   const { jobOffers, setJobOffers, canApply, incrementApplications, addApplication, profile, skills } = useAppStore();
   const [isLoading, setIsLoading] = useState(false);
   const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchLocation, setSearchLocation] = useState(profile?.targetLocation || '');
+  const [searchRadius, setSearchRadius] = useState('50');
+  const [selectedJob, setSelectedJob] = useState<any | null>(null);
+  const [applyingJob, setApplyingJob] = useState<any | null>(null);
+
+  // Sync profile location initially
+  useEffect(() => {
+    if (profile?.targetLocation && !searchLocation) {
+      setSearchLocation(profile.targetLocation);
+    }
+  }, [profile?.targetLocation]);
 
   const mockJobs = [
     { id: '1', title: 'Développeur Full Stack', company: 'TechCorp', location: 'Paris', description: 'React, Node.js, AWS', salary: '55k-70k', jobType: 'CDI', remote: true, matchScore: 92, source: 'LinkedIn', sourceUrl: '', publishedAt: '2024-01-15' },
@@ -1002,104 +1703,326 @@ function JobSearchPage() {
       const response = await fetch('/api/jobs/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile, skills, filters: {} }),
+        body: JSON.stringify({ profile, skills, filters: { search: searchQuery, location: searchLocation, radius: searchRadius } }),
       });
       const data = await response.json();
-      setJobOffers(data.jobs?.length > 0 ? data.jobs : mockJobs);
+      const jobs = data.jobs || [];
+      setJobOffers(jobs);
+      if (jobs.length > 0) setSelectedJob(jobs[0]);
+      else setSelectedJob(null);
     } catch {
-      setJobOffers(mockJobs);
+      setJobOffers([]);
+      setSelectedJob(null);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (jobOffers.length === 0) handleSearch();
+    if (jobOffers.length === 0 && !isLoading) handleSearch();
   }, []);
 
-  const handleApply = async (job: typeof mockJobs[0]) => {
+  const handleApply = (job: typeof mockJobs[0]) => {
     if (!canApply()) {
       toast({ title: 'Limite atteinte', description: 'Passez à un plan supérieur.', variant: 'destructive' });
       return;
     }
-    
-    setApplyingJobId(job.id);
+    setApplyingJob(job);
+  };
+
+  const handleWizardSubmit = async (formData: any) => {
+    const job = applyingJob;
+    if (!job) return;
+    setApplyingJob(null);
     try {
       const response = await fetch('/api/applications/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId: job.id, profile, skills, jobOffer: job }),
       });
-      
       const data = await response.json();
       incrementApplications();
-      addApplication({ 
-        id: data.applicationId || crypto.randomUUID(), 
-        jobId: job.id, 
-        jobTitle: job.title, 
-        company: job.company, 
-        status: 'sent', 
-        coverLetter: data.coverLetter || '', 
-        sentAt: new Date().toISOString() 
+      addApplication({
+        id: data.applicationId || crypto.randomUUID(),
+        jobId: job.id,
+        jobTitle: job.title,
+        company: job.company,
+        status: 'sent',
+        coverLetter: formData.coverLetter || data.coverLetter || '',
+        sentAt: new Date().toISOString()
       });
-      toast({ title: 'Candidature envoyée !', description: `Votre candidature pour ${job.title} a été envoyée.` });
+      toast({ title: '🎉 Candidature envoyée !', description: `Votre candidature pour ${job.title} chez ${job.company} a été envoyée avec succès.` });
     } catch {
       incrementApplications();
-      addApplication({ id: crypto.randomUUID(), jobId: job.id, jobTitle: job.title, company: job.company, status: 'sent', coverLetter: '', sentAt: new Date().toISOString() });
-      toast({ title: 'Candidature envoyée !', description: `Votre candidature pour ${job.title} a été envoyée.` });
-    } finally {
-      setApplyingJobId(null);
+      addApplication({ id: crypto.randomUUID(), jobId: job.id, jobTitle: job.title, company: job.company, status: 'sent', coverLetter: formData.coverLetter || '', sentAt: new Date().toISOString() });
+      toast({ title: '🎉 Candidature envoyée !', description: `Votre candidature pour ${job.title} a été envoyée.` });
     }
   };
 
   return (
-    <div className="container mx-auto max-w-6xl py-8 px-4">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Recherche d'emploi</h1>
-        <p className="text-muted-foreground">Trouvez les meilleures opportunités</p>
-      </div>
-
-      <div className="mb-6">
-        <Button onClick={handleSearch} disabled={isLoading} className="gap-2">
-          {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          {isLoading ? 'Recherche en cours...' : 'Actualiser les offres'}
-        </Button>
-      </div>
-
-      <div className="space-y-4">
-        {jobOffers.map((job) => (
-          <Card key={job.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><Building2 className="h-6 w-6 text-primary" /></div>
-                  <div>
-                    <h3 className="font-semibold text-lg">{job.title}</h3>
-                    <p className="text-muted-foreground">{job.company}</p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {job.location && <Badge variant="secondary" className="gap-1"><MapPin className="h-3 w-3" />{job.location}</Badge>}
-                      {job.remote && <Badge variant="secondary" className="gap-1"><Globe className="h-3 w-3" />Remote</Badge>}
-                      {job.salary && <Badge variant="secondary" className="gap-1"><DollarSign className="h-3 w-3" />{job.salary}</Badge>}
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2">{job.description}</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="text-right"><div className="text-sm font-medium">Match</div><div className="text-2xl font-bold text-accent">{job.matchScore}%</div></div>
-                    <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center"><Star className="h-6 w-6 text-accent" /></div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-1" />Détails</Button>
-                    <Button size="sm" className="gradient-primary text-white" onClick={() => handleApply(job)}><Send className="h-4 w-4 mr-1" />Postuler</Button>
-                  </div>
-                </div>
+    <>
+      <div className="bg-[#f3f2f1] min-h-screen -mt-0">
+        {/* Barre de recherche style Indeed */}
+        <div className="bg-white border-b shadow-sm py-5">
+          <div className="container mx-auto max-w-7xl px-4">
+            <div className="flex flex-col sm:flex-row items-stretch gap-3 bg-white rounded-xl border shadow-md p-2">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Input
+                  placeholder="Intitulé de poste, mots-clés"
+                  className="pl-10 h-12 border-0 shadow-none text-base focus-visible:ring-0 bg-transparent"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                />
               </div>
-            </CardContent>
-          </Card>
-        ))}
+              <Separator orientation="vertical" className="hidden sm:block h-12 my-auto" />
+              <div className="flex-1 flex items-center relative pr-2">
+                <div className="flex-1 relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Input
+                    placeholder="Lieu (ex: Paris, Remote)"
+                    className="pl-10 h-12 border-0 shadow-none text-base focus-visible:ring-0 bg-transparent"
+                    value={searchLocation}
+                    onChange={(e) => setSearchLocation(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                </div>
+                <Separator orientation="vertical" className="h-8 hidden sm:block mx-1" />
+                <Select value={searchRadius} onValueChange={setSearchRadius}>
+                  <SelectTrigger className="w-[110px] h-10 border-0 shadow-none focus:ring-0 text-gray-600 bg-transparent hover:bg-gray-50 shrink-0">
+                    <SelectValue placeholder="Rayon" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">+ 10 km</SelectItem>
+                    <SelectItem value="25">+ 25 km</SelectItem>
+                    <SelectItem value="50">+ 50 km</SelectItem>
+                    <SelectItem value="100">+ 100 km</SelectItem>
+                    <SelectItem value="250">Partout</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={handleSearch}
+                disabled={isLoading}
+                className="h-12 px-8 text-base font-semibold rounded-lg shrink-0"
+                style={{ backgroundColor: '#2557a7', color: 'white' }}
+              >
+                {isLoading ? <RefreshCw className="h-5 w-5 animate-spin" /> : 'Rechercher'}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="container mx-auto max-w-7xl px-4 pt-6">
+          {/* Compteur de résultats */}
+          {jobOffers.length > 0 && (
+            <div className="mb-4 text-sm text-gray-600">
+              Emplois <strong>{searchQuery || 'recommandés'}</strong> — {jobOffers.length} résultat{jobOffers.length > 1 ? 's' : ''}
+            </div>
+          )}
+
+          <div className="lg:grid lg:grid-cols-[420px_1fr] gap-4 items-start">
+            {/* Colonne Liste (Gauche) */}
+            <div className="space-y-2 lg:h-[calc(100vh-10rem)] lg:overflow-y-auto pr-1 pb-20">
+              {jobOffers.length === 0 && !isLoading && (
+                <div className="text-center py-16 bg-white rounded-lg border">
+                  <Search className="h-14 w-14 mx-auto mb-4 text-gray-300" />
+                  <h3 className="text-lg font-medium text-gray-800 mb-2">Aucune offre trouvée</h3>
+                  <p className="text-gray-500 text-sm">Essayez avec d'autres mots-clés ou une autre localisation.</p>
+                </div>
+              )}
+              {jobOffers.map((job) => (
+                <div
+                  key={job.id}
+                  className={`bg-white rounded-lg border-2 p-5 cursor-pointer transition-all hover:shadow-md ${selectedJob?.id === job.id
+                    ? 'border-[#2557a7] shadow-md'
+                    : 'border-transparent hover:border-gray-300'
+                    }`}
+                  onClick={() => setSelectedJob(job)}
+                >
+                  <h3 className="font-semibold text-base text-[#2557a7] mb-1 line-clamp-2">{job.title}</h3>
+                  <p className="text-sm font-medium text-gray-900 mb-1">{job.company}</p>
+                  <div className="flex items-center gap-1 text-sm text-gray-600 mb-3">
+                    <MapPin className="h-3.5 w-3.5" />
+                    {job.location || 'Remote'}
+                    {job.remote && <span className="ml-1">• Télétravail</span>}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {job.jobType && (
+                      <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded">{job.jobType}</span>
+                    )}
+                    {job.salary && job.salary !== 'Non spécifié' && (
+                      <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded">{job.salary}</span>
+                    )}
+                  </div>
+
+                  <p className="text-sm text-gray-600 line-clamp-2 mb-3">{job.description}</p>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1 text-xs text-gray-400">
+                      <Zap className="h-3 w-3" />
+                      <span>Candidature simplifiée</span>
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {new Date(job.publishedAt).toLocaleDateString('fr-FR')}
+                    </span>
+                  </div>
+
+                  {/* Fallback Mobile */}
+                  <div className="lg:hidden mt-3 pt-3 border-t">
+                    <JobDetailsDialog job={job} onApply={() => handleApply(job)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Voir les détails
+                      </Button>
+                    </JobDetailsDialog>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Colonne Détails (Droite) - Desktop uniquement */}
+            <div className="hidden lg:block lg:h-[calc(100vh-10rem)]">
+              {selectedJob ? (
+                <div className="bg-white rounded-lg border h-full flex flex-col overflow-hidden">
+                  <div className="flex-1 overflow-y-auto p-8">
+                    {/* En-tête du poste */}
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">{selectedJob.title}</h1>
+                    <div className="flex items-center gap-2 mb-1">
+                      <a
+                        href={selectedJob.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#2557a7] font-medium hover:underline flex items-center gap-1"
+                      >
+                        {selectedJob.company} <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                    <div className="text-sm text-gray-600 mb-6 flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" />
+                      {selectedJob.location || 'Remote'}
+                      {selectedJob.remote && <span>• Télétravail</span>}
+                    </div>
+
+                    {/* Bouton Postuler */}
+                    <div className="flex items-center gap-3 mb-8">
+                      <Button
+                        className="px-8 py-3 h-auto text-base font-semibold rounded-lg"
+                        style={{ backgroundColor: '#2557a7', color: 'white' }}
+                        onClick={() => handleApply(selectedJob)}
+                      >
+                        Postuler maintenant
+                      </Button>
+                    </div>
+
+                    <Separator className="mb-8" />
+
+                    {/* Section "Détails de l'emploi" - style Indeed */}
+                    <div className="mb-8">
+                      <h2 className="text-lg font-bold text-gray-900 mb-4">Détails de l'emploi</h2>
+
+                      {selectedJob.salary && selectedJob.salary !== 'Non spécifié' && (
+                        <div className="mb-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <DollarSign className="h-5 w-5 text-gray-500" />
+                            <span className="font-semibold text-sm text-gray-700">Salaire</span>
+                          </div>
+                          <span className="text-sm bg-gray-100 text-gray-700 px-3 py-1.5 rounded ml-7">{selectedJob.salary}</span>
+                        </div>
+                      )}
+
+                      <div className="mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Briefcase className="h-5 w-5 text-gray-500" />
+                          <span className="font-semibold text-sm text-gray-700">Type de poste</span>
+                        </div>
+                        <span className="text-sm bg-gray-100 text-gray-700 px-3 py-1.5 rounded ml-7">{selectedJob.jobType || 'CDI'}</span>
+                      </div>
+                    </div>
+
+                    <Separator className="mb-8" />
+
+                    {/* Section "Lieu" - style Indeed */}
+                    <div className="mb-8">
+                      <h2 className="text-lg font-bold text-gray-900 mb-4">Lieu</h2>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <MapPin className="h-5 w-5 text-gray-500" />
+                        {selectedJob.location || 'Remote'}
+                        {selectedJob.remote && <span>• Télétravail</span>}
+                      </div>
+                    </div>
+
+                    <Separator className="mb-8" />
+
+                    {/* Compatibilité IA */}
+                    <div className="flex items-center gap-4 mb-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-sm mb-1 text-[#2557a7] flex items-center gap-1">
+                          <Sparkles className="h-4 w-4" /> Compatibilité IA avec votre profil
+                        </h4>
+                        <Progress value={selectedJob.matchScore} className="h-2 mt-2" />
+                      </div>
+                      <div className="text-3xl font-bold text-[#2557a7] pl-4 border-l border-blue-200">{selectedJob.matchScore}%</div>
+                    </div>
+
+                    <Separator className="mb-8" />
+
+                    {/* Description complète du poste */}
+                    <div className="mb-8">
+                      <h2 className="text-lg font-bold text-gray-900 mb-4">Description complète du poste</h2>
+                      {selectedJob.htmlDescription ? (
+                        <div
+                          className="prose prose-sm max-w-none text-gray-700 prose-ul:list-disc prose-ul:pl-5 prose-ul:marker:text-[#e85d04] prose-h2:text-2xl prose-h2:font-bold prose-h2:text-gray-900 prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-sm prose-h3:font-bold prose-h3:text-gray-800 prose-h3:mt-6 prose-h3:mb-2 prose-p:my-2"
+                          dangerouslySetInnerHTML={{ __html: selectedJob.htmlDescription }}
+                        />
+                      ) : (
+                        <p className="text-gray-700 whitespace-pre-wrap">{selectedJob.description}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Footer fixe */}
+                  <div className="p-4 bg-white border-t flex gap-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
+                    <Button
+                      className="flex-1 py-3 h-auto text-base font-semibold rounded-lg"
+                      style={{ backgroundColor: '#2557a7', color: 'white' }}
+                      onClick={() => handleApply(selectedJob)}
+                    >
+                      <Send className="h-5 w-5 mr-2" /> Postuler maintenant
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg border h-full flex items-center justify-center">
+                  <div className="text-center p-8 text-gray-400">
+                    <FileText className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                    <h3 className="text-xl font-medium mb-2 text-gray-600">Aucune offre sélectionnée</h3>
+                    <p>Cliquez sur une offre dans la liste pour voir les détails ici.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* Apply Wizard */}
+      {
+        applyingJob && (
+          <ApplyWizard
+            job={applyingJob}
+            onClose={() => setApplyingJob(null)}
+            onSubmit={handleWizardSubmit}
+          />
+        )
+      }
+    </>
   );
 }
 
@@ -1132,7 +2055,7 @@ function DashboardPage() {
       toast({ title: 'Non disponible', description: 'Gérez votre abonnement depuis la page Tarifs.', variant: 'destructive' });
       return;
     }
-    
+
     setIsLoadingPortal(true);
     try {
       const response = await fetch('/api/stripe/portal', {
@@ -1140,9 +2063,9 @@ function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerId: subscription.stripeCustomerId }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.url) {
         window.open(data.url, '_blank');
       }
@@ -1185,8 +2108,21 @@ function DashboardPage() {
                         <div><div className="font-medium">{app.jobTitle}</div><div className="text-sm text-muted-foreground">{app.company}</div></div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="gap-1"><Icon className="h-3 w-3" />{s.label}</Badge>
-                        <span className="text-xs text-muted-foreground">{app.sentAt}</span>
+                        {app.sourceUrl && (
+                          <Button variant="outline" size="sm" asChild className="h-7 text-xs">
+                            <a href={app.sourceUrl} target="_blank" rel="noopener noreferrer">Postuler (Lien)</a>
+                          </Button>
+                        )}
+                        {app.coverLetter && (
+                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={async () => {
+                            await navigator.clipboard.writeText(app.coverLetter);
+                            toast({ title: 'Copié', description: 'Lettre de motivation copiée dans le presse-papier.' });
+                          }}>
+                            Copier Lettre
+                          </Button>
+                        )}
+                        <Badge variant="outline" className="gap-1"><Icon className="h-3 w-3" />{app.sourceUrl ? 'Préparée' : s.label}</Badge>
+                        <span className="text-xs text-muted-foreground">{app.sentAt ? new Date(app.sentAt).toLocaleDateString('fr-FR') : ''}</span>
                       </div>
                     </div>
                   );
@@ -1215,22 +2151,22 @@ function DashboardPage() {
                 </div>
                 <Crown className="h-8 w-8 text-accent" />
               </div>
-              
+
               {subscription?.cancelAtPeriodEnd && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
                   Votre abonnement se terminera le {subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString('fr-FR') : 'fin de période'}.
                 </div>
               )}
-              
+
               <div className="space-y-2">
                 {subscription && subscription.plan !== 'elite' && (
                   <Button className="w-full" onClick={() => setCurrentView('pricing')}>Upgrader</Button>
                 )}
-                
+
                 {subscription && subscription.plan !== 'starter' && subscription.stripeCustomerId && (
-                  <Button 
-                    variant="outline" 
-                    className="w-full" 
+                  <Button
+                    variant="outline"
+                    className="w-full"
                     onClick={handleBillingPortal}
                     disabled={isLoadingPortal}
                   >
@@ -1238,7 +2174,7 @@ function DashboardPage() {
                     Gérer l'abonnement
                   </Button>
                 )}
-                
+
                 {subscription && subscription.plan !== 'starter' && !subscription.stripeCustomerId && (
                   <Button variant="outline" className="w-full" onClick={cancelSubscription}>
                     Annuler le renouvellement
@@ -1273,18 +2209,18 @@ function ImportCVPage() {
   const handleFileUpload = async (file: File) => {
     setIsImporting(true);
     setDragActive(false);
-    
+
     try {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       const response = await fetch('/api/cv/import', {
         method: 'POST',
         body: formData,
       });
-      
+
       const data = await response.json();
-      
+
       if (data.success && data.file) {
         setImportedCVFile({
           name: data.file.name,
@@ -1294,16 +2230,16 @@ function ImportCVPage() {
           dataUrl: data.file.dataUrl,
           uploadedAt: new Date().toISOString()
         });
-        toast({ 
-          title: 'CV importé avec succès !', 
-          description: 'Votre CV est prêt à être utilisé pour vos candidatures.' 
+        toast({
+          title: 'CV importé avec succès !',
+          description: 'Votre CV est prêt à être utilisé pour vos candidatures.'
         });
       } else {
         throw new Error(data.error || 'Erreur lors de l\'import');
       }
     } catch (error: any) {
-      toast({ 
-        title: 'Erreur', 
+      toast({
+        title: 'Erreur',
         description: error.message || 'Impossible d\'importer le CV. Essayez un autre fichier.',
         variant: 'destructive'
       });
@@ -1414,7 +2350,7 @@ function ImportCVPage() {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
               <p className="font-medium text-blue-800 mb-1">💡 Bon à savoir</p>
               <p className="text-blue-700">
-                Votre CV importé sera utilisé tel quel pour vos candidatures automatiques. 
+                Votre CV importé sera utilisé tel quel pour vos candidatures automatiques.
                 Il sera envoyé en pièce jointe avec vos lettres de motivation personnalisées.
               </p>
             </div>
@@ -1425,9 +2361,8 @@ function ImportCVPage() {
         <Card className="mb-8">
           <CardContent className="p-8">
             <div
-              className={`border-2 border-dashed rounded-xl p-12 text-center transition-all ${
-                dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'
-              }`}
+              className={`border-2 border-dashed rounded-xl p-12 text-center transition-all ${dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'
+                }`}
               onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
               onDragLeave={() => setDragActive(false)}
               onDrop={(e) => {
@@ -1509,16 +2444,6 @@ function AutoApplyPage() {
   const [applicationsToday, setApplicationsToday] = useState(0);
 
   const handleStartAutoApply = async () => {
-    if (!subscription || subscription.plan === 'starter') {
-      toast({ title: 'Abonnement requis', description: 'Passez à un plan Pro ou Elite pour utiliser l\'auto-candidature.', variant: 'destructive' });
-      return;
-    }
-
-    if (!importedCVFile) {
-      toast({ title: 'CV requis', description: 'Importez d\'abord votre CV dans l\'onglet "Importer".', variant: 'destructive' });
-      return;
-    }
-
     setIsRunning(true);
     try {
       const response = await fetch('/api/auto-apply/start', {
@@ -1526,15 +2451,9 @@ function AutoApplyPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           profile,
-          experiences,
           skills,
           preferences: jobPreferences,
           maxApplications: jobPreferences.maxApplicationsPerDay,
-          importedCV: {
-            name: importedCVFile.name,
-            type: importedCVFile.type,
-            dataUrl: importedCVFile.dataUrl
-          }
         }),
       });
 
@@ -1549,13 +2468,16 @@ function AutoApplyPage() {
             company: app.company,
             status: 'sent',
             coverLetter: app.coverLetter,
+            sourceUrl: app.sourceUrl,
             sentAt: app.sentAt
           });
         });
 
-        setApplicationsToday(data.applications.length);
+        setApplicationsToday(prev => prev + data.applications.length);
         setLastRun(new Date().toISOString());
-        toast({ title: 'Candidatures envoyées !', description: data.message });
+        toast({ title: '🎉 Candidatures préparées !', description: "Retrouvez-les dans votre Tableau de bord pour les envoyer." });
+      } else {
+        toast({ title: 'Information', description: data.message || 'Aucune offre trouvée correspondant à vos critères.' });
       }
     } catch {
       toast({ title: 'Erreur', description: 'Impossible de lancer les candidatures automatiques.', variant: 'destructive' });
@@ -1768,7 +2690,7 @@ function AutoApplyPage() {
 // ============================================
 function Footer() {
   const { setCurrentView } = useAppStore();
-  
+
   return (
     <footer className="border-t bg-card mt-auto">
       <div className="container mx-auto max-w-6xl px-4 py-8">

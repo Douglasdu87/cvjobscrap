@@ -203,6 +203,7 @@ export interface JobOffer {
   company: string;
   location: string;
   description: string;
+  htmlDescription?: string;
   salary: string;
   jobType: string;
   remote: boolean;
@@ -234,63 +235,63 @@ export interface PaymentHistory {
 interface AppState {
   currentView: View;
   setCurrentView: (view: View) => void;
-  
+
   // Profile
   profile: Profile;
   setProfile: (profile: Partial<Profile>) => void;
-  
+
   // Experiences
   experiences: Experience[];
   addExperience: (exp: Experience) => void;
   updateExperience: (id: string, exp: Partial<Experience>) => void;
   removeExperience: (id: string) => void;
-  
+
   // Educations
   educations: Education[];
   addEducation: (edu: Education) => void;
   updateEducation: (id: string, edu: Partial<Education>) => void;
   removeEducation: (id: string) => void;
-  
+
   // Certifications
   certifications: Certification[];
   addCertification: (cert: Certification) => void;
   removeCertification: (id: string) => void;
-  
+
   // Languages
   languages: Language[];
   addLanguage: (lang: Language) => void;
   removeLanguage: (id: string) => void;
-  
+
   // Skills
   skills: Skill[];
   addSkill: (skill: Skill) => void;
   removeSkill: (id: string) => void;
-  
+
   // Job offers
   jobOffers: JobOffer[];
   setJobOffers: (offers: JobOffer[]) => void;
-  
+
   // Applications
   applications: Application[];
   addApplication: (app: Application) => void;
   updateApplicationStatus: (id: string, status: Application['status']) => void;
-  
+
   // Generated CV
   generatedCV: string;
   setGeneratedCV: (cv: string) => void;
-  
+
   // CV Template Settings
   cvTemplate: string;
   cvPrimaryColor: string;
   setCvTemplate: (template: string) => void;
   setCvPrimaryColor: (color: string) => void;
-  
+
   // Settings
   autoApply: boolean;
   setAutoApply: (value: boolean) => void;
   frequency: 'daily' | 'weekly' | 'custom';
   setFrequency: (value: 'daily' | 'weekly' | 'custom') => void;
-  
+
   // Auto-Apply Job Preferences
   jobPreferences: {
     jobTypes: string[];
@@ -302,7 +303,7 @@ interface AppState {
     maxApplicationsPerDay: number;
   };
   setJobPreferences: (prefs: Partial<AppState['jobPreferences']>) => void;
-  
+
   // Imported CV File
   importedCVFile: {
     name: string;
@@ -314,13 +315,13 @@ interface AppState {
   } | null;
   setImportedCVFile: (file: AppState['importedCVFile']) => void;
   clearImportedCVFile: () => void;
-  
+
   // Subscription
   subscription: Subscription | null;
   setSubscription: (subscription: Subscription | null) => void;
   upgradePlan: (plan: PlanType) => void;
   cancelSubscription: () => void;
-  
+
   // Usage & Quotas
   usage: Usage;
   incrementApplications: () => boolean; // Returns false if limit reached
@@ -329,7 +330,7 @@ interface AppState {
   canApply: () => boolean;
   canGenerateCV: () => boolean;
   getRemainingApplications: () => number;
-  
+
   // Payment History
   paymentHistory: PaymentHistory[];
   addPayment: (payment: PaymentHistory) => void;
@@ -349,7 +350,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       currentView: 'home',
       setCurrentView: (view) => set({ currentView: view }),
-      
+
       profile: {
         firstName: '',
         lastName: '',
@@ -369,7 +370,7 @@ export const useAppStore = create<AppState>()(
         remoteWork: false,
       },
       setProfile: (profile) => set((state) => ({ profile: { ...state.profile, ...profile } })),
-      
+
       experiences: [],
       addExperience: (exp) => set((state) => ({ experiences: [...state.experiences, exp] })),
       updateExperience: (id, exp) => set((state) => ({
@@ -378,7 +379,7 @@ export const useAppStore = create<AppState>()(
       removeExperience: (id) => set((state) => ({
         experiences: state.experiences.filter((e) => e.id !== id)
       })),
-      
+
       educations: [],
       addEducation: (edu) => set((state) => ({ educations: [...state.educations, edu] })),
       updateEducation: (id, edu) => set((state) => ({
@@ -387,48 +388,48 @@ export const useAppStore = create<AppState>()(
       removeEducation: (id) => set((state) => ({
         educations: state.educations.filter((e) => e.id !== id)
       })),
-      
+
       certifications: [],
       addCertification: (cert) => set((state) => ({ certifications: [...state.certifications, cert] })),
       removeCertification: (id) => set((state) => ({
         certifications: state.certifications.filter((c) => c.id !== id)
       })),
-      
+
       languages: [],
       addLanguage: (lang) => set((state) => ({ languages: [...state.languages, lang] })),
       removeLanguage: (id) => set((state) => ({
         languages: state.languages.filter((l) => l.id !== id)
       })),
-      
+
       skills: [],
       addSkill: (skill) => set((state) => ({ skills: [...state.skills, skill] })),
       removeSkill: (id) => set((state) => ({
         skills: state.skills.filter((s) => s.id !== id)
       })),
-      
+
       jobOffers: [],
       setJobOffers: (offers) => set({ jobOffers: offers }),
-      
+
       applications: [],
       addApplication: (app) => set((state) => ({ applications: [...state.applications, app] })),
       updateApplicationStatus: (id, status) => set((state) => ({
         applications: state.applications.map((a) => a.id === id ? { ...a, status } : a)
       })),
-      
+
       generatedCV: '',
       setGeneratedCV: (cv) => set({ generatedCV: cv }),
-      
+
       // CV Template Settings
       cvTemplate: 'modern',
       cvPrimaryColor: '#1a365d',
       setCvTemplate: (template) => set({ cvTemplate: template }),
       setCvPrimaryColor: (color) => set({ cvPrimaryColor: color }),
-      
+
       autoApply: false,
       setAutoApply: (value) => set({ autoApply: value }),
       frequency: 'daily',
       setFrequency: (value) => set({ frequency: value }),
-      
+
       // Job Preferences
       jobPreferences: {
         jobTypes: [],
@@ -442,12 +443,12 @@ export const useAppStore = create<AppState>()(
       setJobPreferences: (prefs) => set((state) => ({
         jobPreferences: { ...state.jobPreferences, ...prefs }
       })),
-      
+
       // Imported CV File
       importedCVFile: null,
       setImportedCVFile: (file) => set({ importedCVFile: file }),
       clearImportedCVFile: () => set({ importedCVFile: null }),
-      
+
       // Subscription
       subscription: null,
       setSubscription: (subscription) => set({ subscription }),
@@ -475,7 +476,7 @@ export const useAppStore = create<AppState>()(
           cancelAtPeriodEnd: true,
         }
       } : state),
-      
+
       // Usage & Quotas
       usage: {
         applicationsThisWeek: 0,
@@ -483,11 +484,11 @@ export const useAppStore = create<AppState>()(
         weekStartDate: getStartOfWeek(),
         totalApplications: 0,
       },
-      
+
       incrementApplications: () => {
         const state = get();
         if (!state.canApply()) return false;
-        
+
         set((s) => ({
           usage: {
             ...s.usage,
@@ -497,11 +498,11 @@ export const useAppStore = create<AppState>()(
         }));
         return true;
       },
-      
+
       incrementCVGeneration: () => {
         const state = get();
         if (!state.canGenerateCV()) return false;
-        
+
         set((s) => ({
           usage: {
             ...s.usage,
@@ -510,7 +511,7 @@ export const useAppStore = create<AppState>()(
         }));
         return true;
       },
-      
+
       resetWeeklyUsage: () => set((s) => ({
         usage: {
           ...s.usage,
@@ -518,13 +519,13 @@ export const useAppStore = create<AppState>()(
           weekStartDate: getStartOfWeek(),
         }
       })),
-      
+
       canApply: () => {
         const state = get();
         const plan = state.subscription?.plan || 'starter';
         const planLimits = SUBSCRIPTION_PLANS.find(p => p.id === plan)?.limits;
         if (!planLimits) return false;
-        
+
         // Check if week has changed
         const currentWeekStart = getStartOfWeek();
         if (state.usage.weekStartDate !== currentWeekStart) {
@@ -532,37 +533,37 @@ export const useAppStore = create<AppState>()(
             usage: { ...s.usage, applicationsThisWeek: 0, weekStartDate: currentWeekStart }
           }));
         }
-        
+
         // Unlimited
         if (planLimits.applicationsPerWeek === -1) return true;
-        
+
         return state.usage.applicationsThisWeek < planLimits.applicationsPerWeek;
       },
-      
+
       canGenerateCV: () => {
         const state = get();
         const plan = state.subscription?.plan || 'starter';
         const planLimits = SUBSCRIPTION_PLANS.find(p => p.id === plan)?.limits;
         if (!planLimits) return false;
-        
+
         // Unlimited
         if (planLimits.cvGeneration === -1) return true;
-        
+
         return state.usage.cvGenerated < planLimits.cvGeneration;
       },
-      
+
       getRemainingApplications: () => {
         const state = get();
         const plan = state.subscription?.plan || 'starter';
         const planLimits = SUBSCRIPTION_PLANS.find(p => p.id === plan)?.limits;
         if (!planLimits) return 0;
-        
+
         // Unlimited
         if (planLimits.applicationsPerWeek === -1) return -1;
-        
+
         return Math.max(0, planLimits.applicationsPerWeek - state.usage.applicationsThisWeek);
       },
-      
+
       // Payment History
       paymentHistory: [],
       addPayment: (payment) => set((state) => ({
