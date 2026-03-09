@@ -1093,7 +1093,8 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
                   <section>
                     <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
                       Formation
-                      <div className="h-px flex-1 bg-gray-300 mt-1"></div>
+                      <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
+                      <div className="h-px flex-1 bg-gray-300"></div>
                     </h3>
                     <div className="space-y-3">
                       {educations.map((edu: any, i: number) => (
@@ -1117,7 +1118,8 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
                   <section>
                     <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
                       Expérience
-                      <div className="h-px flex-1 bg-gray-300 mt-1"></div>
+                      <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
+                      <div className="h-px flex-1 bg-gray-300"></div>
                     </h3>
                     <div className="space-y-8">
                       {experiences.map((exp: any, i: number) => (

@@ -126,15 +126,16 @@ export async function POST(request: NextRequest) {
       doc.circle(sidebarWidth / 2, 25, 15, 'F');
       
       // Sidebar: Profil
-      let sideY = 60;
-      addText('PROFIL', sidebarWidth / 2, sideY, { fontSize: 11, fontStyle: 'bold', color: '#ffffff', align: 'center' });
+      let sideY = 55;
+      addText('PROFIL', sidebarWidth / 2, sideY, { fontSize: 13, fontStyle: 'bold', color: '#ffffff', align: 'center' });
       doc.setLineWidth(0.2);
+      doc.setDrawColor(200, 200, 200); // white/30 look
       doc.line(sidebarMargin + 5, sideY + 2, sidebarWidth - sidebarMargin - 5, sideY + 2);
       sideY += 10;
       
       const summaryText = aiSummary || "Déterminé, sérieux, autonome et conscient du travail qui m'attend.";
       const summaryHeight = addText(summaryText, sidebarWidth / 2, sideY, { 
-        fontSize: 8.5, 
+        fontSize: 10.5, 
         color: '#ffffff', 
         maxWidth: sidebarWidth - sidebarMargin * 2,
         align: 'center',
@@ -143,71 +144,71 @@ export async function POST(request: NextRequest) {
       sideY += summaryHeight + 20;
 
       // Sidebar: Contact
-      addText('CONTACT', sidebarWidth / 2, sideY, { fontSize: 11, fontStyle: 'bold', color: '#ffffff', align: 'center' });
+      addText('CONTACT', sidebarWidth / 2, sideY, { fontSize: 13, fontStyle: 'bold', color: '#ffffff', align: 'center' });
       doc.line(sidebarMargin + 5, sideY + 2, sidebarWidth - sidebarMargin - 5, sideY + 2);
       sideY += 10;
 
       const contactX = sidebarMargin + 5;
       if (profile?.city || aiHeader.location) {
-        addText(profile.city || aiHeader.location, contactX, sideY, { fontSize: 8.5, color: '#ffffff' });
-        sideY += 6;
+        addText(profile.city || aiHeader.location, contactX, sideY, { fontSize: 10.5, color: '#ffffff' });
+        sideY += 7;
       }
       if (profile?.email || aiHeader.email) {
-        addText(profile.email || aiHeader.email, contactX, sideY, { fontSize: 8.5, color: '#ffffff', maxWidth: sidebarWidth - sidebarMargin * 2 - 5 });
-        sideY += 6;
+        addText(profile.email || aiHeader.email, contactX, sideY, { fontSize: 10.5, color: '#ffffff', maxWidth: sidebarWidth - sidebarMargin * 2 - 5 });
+        sideY += 7;
       }
       if (profile?.phone || aiHeader.phone) {
-        addText(profile.phone || aiHeader.phone, contactX, sideY, { fontSize: 8.5, color: '#ffffff' });
-        sideY += 6;
+        addText(profile.phone || aiHeader.phone, contactX, sideY, { fontSize: 10.5, color: '#ffffff' });
+        sideY += 7;
       }
       if (profile?.linkedin || aiHeader.linkedin) {
-        addText(profile.linkedin || aiHeader.linkedin, contactX, sideY, { fontSize: 8.5, color: '#ffffff', maxWidth: sidebarWidth - sidebarMargin * 2 - 5 });
-        sideY += 6;
+        addText(profile.linkedin || aiHeader.linkedin, contactX, sideY, { fontSize: 10.5, color: '#ffffff', maxWidth: sidebarWidth - sidebarMargin * 2 - 5 });
+        sideY += 7;
       }
 
       // Sidebar: Interests
       if (interests.length > 0) {
         sideY += 15;
-        addText('INTÉRÊTS', sidebarWidth / 2, sideY, { fontSize: 11, fontStyle: 'bold', color: '#ffffff', align: 'center' });
+        addText('INTÉRÊTS', sidebarWidth / 2, sideY, { fontSize: 13, fontStyle: 'bold', color: '#ffffff', align: 'center' });
         doc.line(sidebarMargin + 5, sideY + 2, sidebarWidth - sidebarMargin - 5, sideY + 2);
         sideY += 10;
 
         interests.forEach((interest: string) => {
-          addText(interest, contactX, sideY, { fontSize: 8.5, color: '#ffffff' });
-          sideY += 6;
+          addText(interest, contactX, sideY, { fontSize: 10.5, color: '#ffffff' });
+          sideY += 7;
         });
       }
 
       // Main Content
-      yPosition = 20;
+      yPosition = 25; // Matches pt-16
       
       // Name
       const firstName = aiHeader.fullName?.split(' ')[0] || profile?.firstName || 'Prénom';
       const lastName = aiHeader.fullName?.split(' ').slice(1).join(' ') || profile?.lastName || 'Nom';
       
-      doc.setFontSize(28);
+      doc.setFontSize(36); // text-5xl
       doc.setFont('helvetica', 'normal');
       setColor('#333333');
       doc.text(firstName.toUpperCase(), contentX, yPosition);
       const nameWidth = doc.getTextWidth(firstName.toUpperCase());
       doc.setFont('helvetica', 'bold');
       doc.text(lastName.toUpperCase(), contentX + nameWidth + 3, yPosition);
-      yPosition += 10;
+      yPosition += 12;
 
       // Title
       addText((aiHeader.targetJobTitle || profile?.targetJobTitle || '').toUpperCase(), contentX, yPosition, { 
-        fontSize: 12, 
+        fontSize: 15, // text-xl
         color: '#666666',
         fontStyle: 'bold'
       });
-      yPosition += 20;
+      yPosition += 25;
 
       // Formation
       if (educations.length > 0) {
-        addText('FORMATION', contentX, yPosition, { fontSize: 13, fontStyle: 'bold', color: '#333333' });
+        addText('FORMATION', contentX, yPosition, { fontSize: 13.5, fontStyle: 'bold', color: '#333333' });
         doc.setLineWidth(0.4);
         setDrawColor('#cccccc');
-        doc.line(contentX + 35, yPosition - 1, contentX + contentWidth, yPosition - 1);
+        doc.line(contentX + 45, yPosition - 1, contentX + contentWidth, yPosition - 1);
         yPosition += 8;
 
         educations.forEach((edu: any) => {
@@ -219,14 +220,13 @@ export async function POST(request: NextRequest) {
           }
           
           if (period) {
-            addText(period, contentX, yPosition, { fontSize: 9, fontStyle: 'bold' });
+            addText(period, contentX, yPosition, { fontSize: 10.5, fontStyle: 'bold' });
           }
-          addText(edu.degree || '', contentX + 30, yPosition, { fontSize: 9, fontStyle: 'bold' });
+          addText(edu.degree || '', contentX + 45, yPosition, { fontSize: 10.5, fontStyle: 'bold' });
           yPosition += 5;
           
-          // Only show school if not already in degree
           if (edu.school && !(edu.degree && edu.degree.toLowerCase().includes(edu.school.toLowerCase()))) {
-            addText(edu.school, contentX + 30, yPosition, { fontSize: 9, color: '#666666' });
+            addText(edu.school, contentX + 45, yPosition, { fontSize: 10.5, color: '#666666' });
             yPosition += 8;
           } else {
             yPosition += 3;
@@ -236,10 +236,14 @@ export async function POST(request: NextRequest) {
       }
 
       // Experience
+      const entryColWidth = 45; 
       if (experiences.length > 0) {
-        addText('EXPÉRIENCE', contentX, yPosition, { fontSize: 13, fontStyle: 'bold', color: '#333333' });
-        doc.line(contentX + 35, yPosition - 1, contentX + contentWidth, yPosition - 1);
-        yPosition += 8;
+        addText('EXPÉRIENCE', contentX, yPosition, { fontSize: 13.5, fontStyle: 'bold', color: '#333333' });
+        setFillColor(primaryColor);
+        doc.rect(contentX + 33, yPosition - 1.5, 12, 0.6, 'F');
+        setDrawColor('#cccccc');
+        doc.line(contentX + 47, yPosition - 1.2, contentX + contentWidth, yPosition - 1.2);
+        yPosition += 10;
 
         experiences.forEach((exp: any) => {
           if (yPosition > pageHeight - 50) {
@@ -255,19 +259,24 @@ export async function POST(request: NextRequest) {
           }
 
           if (period) {
-            addText(period, contentX, yPosition, { fontSize: 9, fontStyle: 'bold' });
+            addText(period, contentX, yPosition, { fontSize: 10.5, fontStyle: 'bold' });
           }
-          addText(exp.company || '', contentX, yPosition + 5, { fontSize: 9, fontStyle: 'bold', color: '#666666' });
+          addText(exp.company || '', contentX, yPosition + 5, { fontSize: 10.5, fontStyle: 'bold', color: '#666666' });
           
-          addText((exp.position || '').toUpperCase(), contentX + 30, yPosition, { fontSize: 9, fontStyle: 'bold' });
+          addText((exp.position || '').toUpperCase(), contentX + entryColWidth, yPosition, { fontSize: 10.5, fontStyle: 'bold' });
           yPosition += 5;
           
           const achList = exp.achievements || (exp.description ? [exp.description] : ["Description à compléter"]);
           achList.forEach((ach: string) => {
-            const h = addText(`• ${ach}`, contentX + 30, yPosition, { fontSize: 8.5, maxWidth: contentWidth - 30, color: '#444444', lineHeight: 1.3 });
+            const h = addText(`• ${ach}`, contentX + entryColWidth, yPosition, { 
+              fontSize: 9.5, 
+              maxWidth: contentWidth - entryColWidth, 
+              color: '#444444', 
+              lineHeight: 1.3 
+            });
             yPosition += h + 2;
           });
-          yPosition += 5;
+          yPosition += 6;
         });
       }
 
@@ -283,9 +292,12 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        addText('COMPÉTENCES', contentX, yPosition, { fontSize: 13, fontStyle: 'bold', color: '#333333' });
-        doc.line(contentX + 35, yPosition - 1, contentX + contentWidth, yPosition - 1);
-        yPosition += 10;
+        addText('COMPÉTENCES', contentX, yPosition, { fontSize: 13.5, fontStyle: 'bold', color: '#333333' });
+        setFillColor(primaryColor);
+        doc.rect(contentX + 37, yPosition - 1.5, 12, 0.6, 'F');
+        setDrawColor('#cccccc');
+        doc.line(contentX + 52, yPosition - 1.2, contentX + contentWidth, yPosition - 1.2);
+        yPosition += 12;
 
         const colWidth = contentWidth / 2;
         const skillsSectionY = yPosition;
@@ -293,25 +305,25 @@ export async function POST(request: NextRequest) {
         // Languages
         let languagesY = skillsSectionY;
         if (languages.length > 0) {
-          addText('LANGUES', contentX, languagesY, { fontSize: 9, fontStyle: 'bold' });
-          languagesY += 6;
+          addText('LANGUES', contentX, languagesY, { fontSize: 10.5, fontStyle: 'bold' });
+          languagesY += 8;
           languages.forEach((lang: any) => {
-            addText(`${lang.name}`, contentX, languagesY, { fontSize: 8 });
+            addText(`${lang.name}`, contentX, languagesY, { fontSize: 10 });
             const levelX = contentX + doc.getTextWidth(lang.name) + 2;
-            addText(`: ${lang.level}`, levelX, languagesY, { fontSize: 8, color: '#666666' });
-            languagesY += 5;
+            addText(`: ${lang.level}`, levelX, languagesY, { fontSize: 10, color: '#666666' });
+            languagesY += 6;
           });
         }
 
         // Software Skills
         let softwareY = skillsSectionY;
         if (skills.length > 0) {
-          addText('LOGICIELS MAÎTRISÉS', contentX + colWidth, softwareY, { fontSize: 9, fontStyle: 'bold' });
-          softwareY += 6;
+          addText('LOGICIELS MAÎTRISÉS', contentX + colWidth, softwareY, { fontSize: 10.5, fontStyle: 'bold' });
+          softwareY += 8;
           skills.forEach((skill: any) => {
             const skillName = skill.name || skill;
-            addText(`• ${skillName}`, contentX + colWidth, softwareY, { fontSize: 8, maxWidth: colWidth - 5 });
-            softwareY += 5;
+            addText(`• ${skillName}`, contentX + colWidth, softwareY, { fontSize: 10, maxWidth: colWidth - 5 });
+            softwareY += 6;
           });
         }
         
