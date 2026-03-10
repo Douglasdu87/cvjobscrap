@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppStore, type View, type Profile, type Skill, type Language, SUBSCRIPTION_PLANS, CV_TEMPLATES, CV_COLORS } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -19,7 +20,7 @@ import {
   FileText, Search, Briefcase, Home, User, Plus, Trash2,
   Download, Send, Eye, CheckCircle, XCircle, Clock, TrendingUp,
   Building2, MapPin, Calendar, DollarSign, Sparkles, Zap,
-  Target, BarChart3, Settings, Bell, Star, Globe,
+  Target, BarChart3, Settings, Bell, Star, Globe, Copy,
   Award, BookOpen, Languages, Wrench,
   Menu, X, ArrowRight, Check, RefreshCw, CreditCard,
   Crown, Rocket, Shield, Palette, Layout, Paintbrush,
@@ -647,6 +648,26 @@ function ApplyWizard({ job, onClose, onSubmit }: { job: any; onClose: () => void
     </div>
   );
 }
+// ============================================
+// CV MODAL PREVIEW - Full screen 1:1 scale
+// ============================================
+function CVModalPreview({ cvDataJson, primaryColor, template, children }: { cvDataJson: string, primaryColor: string, template: string, children: React.ReactNode }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild id="open-cv-modal">{children}</DialogTrigger>
+      <DialogContent className="max-w-[95vw] w-fit h-[95vh] p-0 border-none bg-zinc-900 overflow-hidden flex flex-col">
+        <DialogHeader className="p-4 bg-white border-b flex flex-row items-center justify-between space-y-0">
+          <DialogTitle className="text-lg font-bold">Aperçu Haute Fidélité (Échelle 1:1)</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto p-8 flex justify-center bg-zinc-100/50">
+          <div className="shadow-2xl bg-white origin-top" style={{ width: '210mm', minHeight: '297mm' }}>
+            <CVPreviewA4 cvDataJson={cvDataJson} primaryColor={primaryColor} template={template} isModal={true} />
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // ============================================
 // MAIN APP COMPONENT
@@ -713,7 +734,7 @@ function Header() {
             </Badge>
           )}
           <Button variant="ghost" size="sm"><Bell className="h-4 w-4" /></Button>
-          <Button size="sm" className="gradient-primary text-white gap-2"><User className="h-4 w-4" />Compte</Button>
+          <Button size="sm" onClick={() => setCurrentView('dashboard')} className="gradient-primary text-white gap-2"><User className="h-4 w-4" />Compte</Button>
         </div>
 
         <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
@@ -986,206 +1007,183 @@ function PricingPage() {
 // ============================================
 // A4 CV PREVIEW COMPONENT
 // ============================================
-function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: string, primaryColor: string, template: string }) {
-  let data: any = null;
+function CVPreviewA4({ cvDataJson, primaryColor, template, isModal = false }: { cvDataJson: string, primaryColor: string, template: string, isModal?: boolean }) {
+  const [autoScale, setAutoScale] = useState(1);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  let parsedData: any = {};
   try {
-    data = JSON.parse(cvDataJson);
+    parsedData = JSON.parse(cvDataJson);
   } catch (e) {
-    // Fallback if not JSON
-    return <div className="bg-muted rounded-lg p-4 text-sm whitespace-pre-wrap max-h-[800px] overflow-y-auto">{cvDataJson}</div>;
+    // We still call hooks above, so it's safe to return here
+    return <div className="bg-muted rounded-lg p-4 text-sm whitespace-pre-wrap">{cvDataJson}</div>;
   }
 
-  const { header, summary, experiences, educations, skills, languages, interests } = data;
+  const profile = parsedData.profile || {};
+  const experiences = parsedData.experiences || [];
+  const educations = parsedData.educations || [];
+  const skills = parsedData.skills || [];
+  const languages = parsedData.languages || [];
+  const interests = parsedData.interests || [];
+  const summary = parsedData.summary || profile?.summary || "";
+  const header = parsedData.header || {};
+
   const isDoubleColumn = template === 'modern' || template === 'elegant' || template === 'creative';
+  const baseSize = (isModal ? 1 : 0.42) * autoScale;
 
   return (
-    <div className="flex justify-center bg-gray-100 p-4 overflow-x-auto rounded-lg">
-      <div
-        className="bg-white shadow-xl mx-auto flex flex-col md:flex-row overflow-hidden relative shrink-0"
-        style={{
-          width: '210mm',
-          minHeight: '297mm', // A4 aspect ratio 
-          transform: 'scale(0.85)',
-          transformOrigin: 'top center',
-          marginBottom: '-15%'
-        }}
-      >
+    <div
+      ref={containerRef}
+      className={`bg-white overflow-hidden ${isModal ? '' : 'w-full shadow-md'}`}
+      style={{
+        width: isModal ? '210mm' : '100%',
+        height: isModal ? '297mm' : 'auto',
+        aspectRatio: '210/297',
+        fontFamily: "'Inter', sans-serif"
+      }}
+    >
+      <div ref={contentRef} className="h-full w-full text-zinc-800" style={{ fontSize: `${10 * baseSize}pt` }}>
         {isDoubleColumn ? (
-          <>
-            {/* Left Sidebar */}
-            <div
-              className="w-[35%] p-8 pt-12 flex flex-col text-white"
-              style={{ backgroundColor: primaryColor }}
-            >
-              <div className="w-32 h-32 rounded-full bg-white/20 mx-auto mb-8 flex items-center justify-center border-4 border-white/30 overflow-hidden">
-                <User className="w-16 h-16 text-white/50" />
+          <div className="flex h-full">
+            {/* Sidebar per Image 2 */}
+            <div className="w-[33%] h-full flex flex-col pt-[12mm] px-[8mm] gap-[12mm]" style={{ backgroundColor: primaryColor, color: '#FFFFFF' }}>
+              <div className="w-[40mm] h-[40mm] mx-auto rounded-xl bg-white/10 flex items-center justify-center border-2 border-white/20 overflow-hidden shadow-inner">
+                <User className="opacity-20" style={{ width: `${18 * baseSize}mm`, height: `${18 * baseSize}mm` }} />
               </div>
 
-              <div className="mb-10 text-center">
-                <h3 className="text-xl font-medium tracking-[0.2em] mb-2 text-white uppercase">Profil</h3>
-                <div className="h-px w-full bg-white/30 mb-4"></div>
-                <p className="text-sm leading-relaxed text-blue-50/90 text-justify">
-                  {summary || "Déterminé, sérieux, autonome et conscient du travail qui m'attend."}
-                </p>
-              </div>
-
-              <div className="mb-10 text-sm">
-                <h3 className="text-xl font-medium tracking-[0.2em] mb-2 text-white uppercase text-center">Contact</h3>
-                <div className="h-px w-full bg-white/30 mb-4"></div>
-                <div className="space-y-4">
-                  {(header?.location || header?.address) && (
-                    <div className="flex items-start gap-4">
-                      <MapPin className="w-5 h-5 shrink-0 mt-0.5 opacity-80" />
-                      <span className="leading-tight opacity-90">{header.location || header.address}</span>
+              {[
+                { label: 'PROFIL', content: summary, type: 'text' },
+                { label: 'CONTACT', content: [
+                  { icon: <MapPin className="opacity-70" />, text: profile.city || header.location },
+                  { icon: <Mail className="opacity-70" />, text: profile.email || header.email },
+                  { icon: <Phone className="opacity-70" />, text: profile.phone || header.phone },
+                  { icon: <Shield className="opacity-70" />, text: "Permis B" }
+                ], type: 'contact' },
+                { label: 'INTÉRÊTS', content: interests, type: 'list' }
+              ].map((sec, i) => (
+                <div key={i} className="space-y-[4mm]">
+                  <h3 className="font-extrabold tracking-[2.5px] text-center border-b border-white/20 pb-[2mm] uppercase" style={{ fontSize: `${11 * baseSize}pt` }}>{sec.label}</h3>
+                  {sec.type === 'text' && <p className="text-center leading-[1.6] opacity-90 font-medium" style={{ fontSize: `${9 * baseSize}pt` }}>{sec.content as string}</p>}
+                  {sec.type === 'contact' && (
+                    <div className="space-y-[4mm]">
+                      {(sec.content as any[]).map((c, j) => c.text && (
+                        <div key={j} className="flex items-center gap-[4mm] opacity-90" style={{ fontSize: `${8.5 * baseSize}pt` }}>
+                          <span className="shrink-0 flex items-center justify-center bg-white/10 rounded-md" style={{ width: `${7 * baseSize}mm`, height: `${7 * baseSize}mm` }}>
+                            {c.icon}
+                          </span>
+                          <span className="truncate font-medium">{c.text}</span>
+                        </div>
+                      ))}
                     </div>
                   )}
-                  {header?.email && (
-                    <div className="flex items-center gap-4">
-                      <Mail className="w-5 h-5 shrink-0 opacity-80" />
-                      <span className="leading-tight opacity-90 break-all">{header.email}</span>
-                    </div>
-                  )}
-                  {header?.phone && (
-                    <div className="flex items-center gap-4">
-                      <Phone className="w-5 h-5 shrink-0 opacity-80" />
-                      <span className="leading-tight opacity-90">{header.phone}</span>
-                    </div>
-                  )}
-                  {header?.linkedin && (
-                    <div className="flex items-center gap-4">
-                      <Globe className="w-5 h-5 shrink-0 opacity-80" />
-                      <span className="leading-tight opacity-90 truncate">{header.linkedin}</span>
+                  {sec.type === 'list' && (sec.content as string[]).length > 0 && (
+                    <div className="space-y-[2.5mm] opacity-90 font-medium" style={{ fontSize: `${8.5 * baseSize}pt` }}>
+                      {(sec.content as string[]).map((item, j) => (
+                        <div key={j} className="flex items-center gap-[3mm]">
+                          <div className="h-[1.2mm] w-[1.2mm] bg-white rounded-full shrink-0" /> {item}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
-              </div>
-
-              {interests && interests.length > 0 && (
-                <div className="mb-10 text-center">
-                  <h3 className="text-xl font-medium tracking-[0.2em] mb-2 text-white uppercase">Intérêts</h3>
-                  <div className="h-px w-full bg-white/30 mb-6"></div>
-                  <div className="space-y-4">
-                    {interests.map((int: string, i: number) => (
-                      <div key={i} className="flex items-center gap-4">
-                        <Star className="w-5 h-5 opacity-80" />
-                        <span className="text-sm opacity-90">{int}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              ))}
             </div>
 
-            {/* Right Main Content */}
-            <div className="w-[65%] p-10 pt-16 pr-12 text-gray-800 flex flex-col">
-              <div className="mb-12">
-                <h1 className="text-5xl font-light text-gray-800 tracking-wider mb-3 leading-tight uppercase relative inline-block">
-                  {header?.fullName?.split(' ')[0] || 'Nom'}{' '}
-                  <span className="font-semibold">{header?.fullName?.split(' ').slice(1).join(' ') || 'Prénom'}</span>
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col pt-[15mm] pl-[4mm] pr-[16mm] gap-[12mm] overflow-hidden">
+              <div className="border-l-8 pl-[6mm]" style={{ borderColor: primaryColor }}>
+                <h1 className="font-black tracking-tighter leading-[0.9] text-zinc-900" style={{ fontSize: `${44 * baseSize}pt` }}>
+                  {profile.firstName || 'DOUGLAS'}<br/>
+                  <span className="text-zinc-400 uppercase">{profile.lastName || 'NTOUTOU'}</span>
                 </h1>
-                <h2 className="text-xl tracking-[0.3em] font-medium text-gray-500 uppercase">
-                  {header?.targetJobTitle || 'Titre du poste'}
+                <h2 className="font-black text-zinc-300 tracking-[6px] mt-[5mm] uppercase" style={{ fontSize: `${15 * baseSize}pt` }}>
+                  {header.targetJobTitle || profile.targetJobTitle || 'DÉVELOPPEUR'}
                 </h2>
               </div>
 
-              <div className="flex-1 space-y-10">
-                {educations && educations.length > 0 && (
-                  <section>
-                    <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
-                      Formation
-                      <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
-                      <div className="h-px flex-1 bg-gray-300"></div>
-                    </h3>
-                    <div className="space-y-3">
-                      {educations.map((edu: any, i: number) => (
-                        <div key={i} className="text-sm leading-relaxed">
-                          <span className="font-bold text-gray-900">{edu.period || `${edu.startDate} - ${edu.endDate}`}</span>
-                          <span className="mx-2 text-gray-400">-</span>
-                          <span className="font-semibold text-gray-800">{edu.degree}</span>
-                          {edu.school && !(edu.degree && edu.degree.toLowerCase().includes(edu.school.toLowerCase())) && (
-                            <>
-                              <span className="mx-2 text-gray-400">-</span>
-                              <span className="text-gray-600">{edu.school}</span>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
+              {[
+                { title: 'FORMATION', items: educations, type: 'edu' },
+                { title: 'EXPÉRIENCE', items: experiences, type: 'exp' },
+                { title: 'COMPÉTENCES', items: skills, type: 'skills' }
+              ].map((section, idx) => section.items.length > 0 && (
+                <div key={idx} className="space-y-[5mm]">
+                  <div className="flex items-center gap-[4mm]">
+                    <div className="w-[14mm] h-[1.5mm]" style={{ backgroundColor: primaryColor }} />
+                    <h3 className="font-extrabold tracking-[4px] text-zinc-800 uppercase" style={{ fontSize: `${12.5 * baseSize}pt` }}>{section.title}</h3>
+                    <div className="flex-1 h-[0.3mm] bg-zinc-100" />
+                  </div>
 
-                {experiences && experiences.length > 0 && (
-                  <section>
-                    <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
-                      Expérience
-                      <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
-                      <div className="h-px flex-1 bg-gray-300"></div>
-                    </h3>
-                    <div className="space-y-8">
-                      {experiences.map((exp: any, i: number) => (
-                        <div key={i} className="flex gap-4">
-                          <div className="w-1/3 shrink-0">
-                            <div className="font-bold text-sm text-gray-900 mb-1">{exp.period || `${exp.startDate} - ${exp.endDate}`}</div>
-                            <div className="text-sm font-semibold text-gray-600">{exp.company}</div>
-                          </div>
-                          <div className="w-2/3">
-                            <h4 className="font-bold text-sm tracking-widest uppercase mb-3 text-gray-800">{exp.position}</h4>
-                            <ul className="list-disc pl-4 space-y-1.5 marker:text-gray-400 text-xs text-gray-600">
-                              {exp.achievements?.map((ach: string, j: number) => (
-                                <li key={j} className="leading-relaxed pl-1">{ach}</li>
-                              )) || <li className="leading-relaxed pl-1">{exp.description}</li>}
-                            </ul>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                <section className="mt-auto pt-8">
-                  <h3 className="text-lg font-medium tracking-[0.2em] uppercase mb-6 flex items-center gap-4">
-                    Compétences
-                    <div className="h-[2px] w-12" style={{ backgroundColor: primaryColor }}></div>
-                    <div className="h-px flex-1 bg-gray-300"></div>
-                  </h3>
-                  <div className="flex gap-12">
-                    {languages && languages.length > 0 && (
-                      <div className="flex-1">
-                        <h4 className="text-xs font-bold tracking-widest uppercase mb-4 text-gray-800">Langues</h4>
-                        <div className="space-y-2">
-                          {languages.map((lang: any, i: number) => (
-                            <div key={i} className="flex text-sm">
-                              <span className="w-24 text-gray-600 font-medium">{lang.name}</span>
-                              <span className="text-gray-400 mx-2">:</span>
-                              <span className="text-gray-800">{lang.level}</span>
-                            </div>
-                          ))}
+                  <div className="space-y-[7mm]">
+                    {section.type === 'edu' && section.items.map((item: any, i: number) => (
+                      <div key={i} className="flex gap-[8mm]">
+                        <div className="w-[38mm] shrink-0 font-extrabold text-zinc-400 whitespace-nowrap pt-[1mm]" style={{ fontSize: `${9.5 * baseSize}pt` }}>{item.period}</div>
+                        <div className="flex-1">
+                          <div className="font-black text-zinc-800 uppercase leading-tight" style={{ fontSize: `${11 * baseSize}pt` }}>{item.degree}</div>
+                          <div className="font-bold text-zinc-400 italic mt-[1mm]" style={{ fontSize: `${10 * baseSize}pt` }}>{item.school}</div>
                         </div>
                       </div>
-                    )}
-                    {skills && skills.length > 0 && (
-                      <div className="flex-1">
-                        <h4 className="text-xs font-bold tracking-widest uppercase mb-4 text-gray-800">Logiciels Maîtrisés</h4>
-                        <div className="space-y-2">
-                          {skills.map((skill: any, i: number) => (
-                            <div key={i} className="text-sm text-gray-600 flex items-center gap-3">
-                              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: primaryColor }}></div>
-                              {skill.name || skill}
-                            </div>
-                          ))}
+                    ))}
+
+                    {section.type === 'exp' && section.items.map((item: any, i: number) => (
+                      <div key={i} className="flex gap-[8mm]">
+                        <div className="w-[38mm] shrink-0 space-y-[2mm] pt-[1mm]">
+                          <div className="font-black text-zinc-900 tracking-tight" style={{ fontSize: `${10.5 * baseSize}pt` }}>{item.period}</div>
+                          <div className="font-black text-zinc-300 uppercase tracking-widest" style={{ fontSize: `${8.5 * baseSize}pt` }}>{item.company}</div>
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-black text-zinc-800 uppercase leading-tight" style={{ fontSize: `${11.5 * baseSize}pt` }}>{item.position}</div>
+                          <ul className="mt-[3mm] space-y-[2mm]">
+                            {(item.achievements || [item.description]).map((ach: string, j: number) => (
+                              <li key={j} className="text-zinc-600 flex gap-[3mm] leading-[1.5] font-medium" style={{ fontSize: `${9 * baseSize}pt` }}>
+                                <span className="text-zinc-200 mt-[1mm]">•</span> <span>{ach}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ))}
+
+                    {section.type === 'skills' && (
+                      <div className="grid grid-cols-2 gap-[10mm]">
+                        <div className="space-y-[4mm] min-w-0">
+                          <h4 className="font-black text-zinc-800 tracking-widest border-b-2 pb-[1.5mm] uppercase" style={{ fontSize: `${10 * baseSize}pt`, borderColor: `${primaryColor}20` }}>LANGUES</h4>
+                          <div className="space-y-[2mm]">
+                            {languages.map((lang: any, i: number) => (
+                              <div key={i} className="flex flex-col gap-0.5 border-b border-zinc-100 last:border-0 pb-1" style={{ fontSize: `${9 * baseSize}pt` }}>
+                                <span className="font-black text-zinc-800 break-words uppercase">{lang.name}</span>
+                                <span className="text-zinc-500 italic font-medium uppercase tracking-wider" style={{ fontSize: `${7.5 * baseSize}pt` }}>{lang.level}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-[4mm] min-w-0">
+                          <h4 className="font-black text-zinc-800 tracking-widest border-b-2 pb-[1.5mm] uppercase" style={{ fontSize: `${10 * baseSize}pt`, borderColor: `${primaryColor}20` }}>LOGICIELS</h4>
+                          <div className="flex flex-wrap gap-x-[3mm] gap-y-[2mm]">
+                            {skills.map((skill: any, i: number) => (
+                              <div key={i} className="flex items-center gap-[1.5mm] text-zinc-600 font-bold" style={{ fontSize: `${9 * baseSize}pt` }}>
+                                <div className="h-[1.5mm] w-[1.5mm] rounded-full shrink-0" style={{ backgroundColor: primaryColor }} /> <span className="break-words">{skill.name || skill}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}
                   </div>
-                </section>
+                </div>
+              ))}
+
+              <div className="mt-auto pt-[6mm] border-t border-zinc-100 flex justify-between uppercase tracking-[3px] font-black text-zinc-200" style={{ fontSize: `${7 * baseSize}pt` }}>
+                <span>CVJobScrap Premium Template</span>
+                <span>Page 01 // 01</span>
               </div>
             </div>
-          </>
+          </div>
         ) : (
           /* Single Column Layout (Minimal/Professional/Classic) */
           <div className="w-full p-16 flex flex-col gap-12 text-gray-800">
             {/* Minimal/Professional Header */}
-            <div>
+            <div className="mb-12">
               <div className="flex justify-between items-baseline mb-4">
                 <h1 className="text-5xl font-bold tracking-tight text-gray-900">
                   {header?.fullName || 'Votre Nom'}
@@ -1196,7 +1194,7 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
                   {header?.location && <div className="text-sm">{header.location}</div>}
                 </div>
               </div>
-              <div className="h-1 w-full" style={{ backgroundColor: primaryColor }}></div>
+              <div className="h-0.5 w-full mt-2" style={{ backgroundColor: primaryColor }}></div>
               <h2 className="text-2xl mt-4 font-medium text-gray-500 uppercase tracking-widest">
                 {header?.targetJobTitle || 'Titre du poste'}
               </h2>
@@ -1221,9 +1219,11 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
                     <div key={i} className="space-y-3">
                       <div className="flex justify-between font-bold text-gray-900">
                         <span className="text-xl">{exp.position}</span>
-                        <span className="text-gray-500 font-medium">{exp.period || `${exp.startDate} - ${exp.endDate}`}</span>
+                        <span className="text-gray-400 font-medium">{(exp.period || `${exp.startDate} - ${exp.endDate}`).replace(/ - $/, '').replace(/^ - /, '')}</span>
                       </div>
-                      <div className="text-lg font-semibold" style={{ color: primaryColor }}>{exp.company}</div>
+                      {exp.company && !exp.position.toLowerCase().includes(exp.company.toLowerCase()) && (
+                        <div className="text-lg font-semibold" style={{ color: primaryColor }}>{exp.company}</div>
+                      )}
                       <ul className="list-disc pl-5 space-y-2 text-gray-600">
                         {exp.achievements?.map((ach: string, j: number) => (
                           <li key={j} className="leading-relaxed">{ach}</li>
@@ -1241,13 +1241,14 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
                 <h3 className="text-xl font-bold uppercase tracking-wider" style={{ color: primaryColor }}>Formation</h3>
                 <div className="space-y-4">
                   {educations.map((edu: any, i: number) => (
-                    <div key={i} className="flex justify-between items-baseline border-b pb-2">
-                      <div>
-                        <span className="font-bold text-gray-900">{edu.degree}</span>
-                        <span className="mx-2 text-gray-400">|</span>
-                        <span className="text-gray-600">{edu.school}</span>
+                    <div key={i} className="flex justify-between items-start border-b border-gray-100 pb-2">
+                      <div className="flex-1 pr-4">
+                        <span className="font-bold text-gray-900 block">{edu.degree}</span>
+                        {edu.school && !edu.degree.toLowerCase().includes(edu.school.toLowerCase()) && (
+                          <span className="text-gray-500 text-sm italic">{edu.school}</span>
+                        )}
                       </div>
-                      <span className="text-sm text-gray-500 font-medium">{edu.period || `${edu.startDate} - ${edu.endDate}`}</span>
+                      <span className="text-sm text-gray-400 font-medium whitespace-nowrap">{(edu.period || `${edu.startDate} - ${edu.endDate}`).replace(/ - $/, '').replace(/^ - /, '')}</span>
                     </div>
                   ))}
                 </div>
@@ -1285,6 +1286,61 @@ function CVPreviewA4({ cvDataJson, primaryColor, template }: { cvDataJson: strin
 }
 
 // ============================================
+// CV MODAL FULLSCREEN
+// ============================================
+function CVModalFullscreen({ cvDataJson, primaryColor, template, onClose, onDownload, isExporting }: { cvDataJson: string, primaryColor: string, template: string, onClose: () => void, onDownload: () => void, isExporting: boolean }) {
+  return (
+    <div className="fixed inset-0 z-[100] bg-zinc-950/98 backdrop-blur-md flex flex-col items-center overflow-y-auto pt-8 pb-20 px-4">
+      {/* Modal Toolbar */}
+      <div className="flex w-full max-w-[210mm] justify-between items-center mb-8 sticky top-0 z-10 bg-zinc-950/80 p-4 rounded-xl backdrop-blur-md border border-white/5 shadow-2xl">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <FileText className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-white font-bold leading-none">Aperçu Haute Définition</h2>
+            <p className="text-zinc-500 text-[10px] uppercase tracking-widest mt-1">Echelle 1:1 - Format A4 Standard</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="default" 
+            size="sm" 
+            onClick={onDownload} 
+            disabled={isExporting}
+            className="gap-2 bg-white text-black hover:bg-zinc-200 font-bold"
+          >
+            {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {isExporting ? 'Export...' : 'Télécharger PDF'}
+          </Button>
+          
+          <Separator orientation="vertical" className="h-8 bg-white/10 mx-2" />
+          
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={onClose} 
+            className="rounded-full text-zinc-400 hover:text-white hover:bg-white/10"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* CV Content Container */}
+      <div className="bg-white shadow-[0_0_80px_rgba(0,0,0,0.3)] rounded-sm overflow-hidden shrink-0 transition-all duration-500 transform scale-[1.02] hover:scale-100 origin-top">
+        <CVPreviewA4 cvDataJson={cvDataJson} primaryColor={primaryColor} template={template} isModal={true} />
+      </div>
+
+      <div className="mt-12 text-zinc-500 text-xs text-center max-w-sm opacity-50 font-medium">
+        Ce document est optimisé pour les systèmes ATS et le format A4 international.
+      </div>
+    </div>
+  );
+}
+
+// ============================================
 // CV BUILDER PAGE
 // ============================================
 function CVBuilderPage() {
@@ -1296,6 +1352,7 @@ function CVBuilderPage() {
     languages, addLanguage, removeLanguage,
     skills, addSkill, removeSkill,
     generatedCV, setGeneratedCV,
+    cvScore, setCvScore,
     canGenerateCV, incrementCVGeneration,
     cvTemplate, setCvTemplate,
     cvPrimaryColor, setCvPrimaryColor
@@ -1303,7 +1360,7 @@ function CVBuilderPage() {
   const [activeTab, setActiveTab] = useState('personal');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [cvScore, setCvScore] = useState(0);
+  const [showFullPreview, setShowFullPreview] = useState(false);
 
   const handleGenerateCV = async () => {
     if (!canGenerateCV()) {
@@ -1656,31 +1713,46 @@ function CVBuilderPage() {
 
             {/* CV Preview */}
             <Card>
-              <CardHeader><CardTitle className="text-lg">Aperçu</CardTitle></CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <CardTitle className="text-lg">Aperçu</CardTitle>
+                {generatedCV && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={() => setShowFullPreview(true)}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                )}
+              </CardHeader>
               <CardContent>
                 {generatedCV ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Badge className="gradient-primary text-white">Score ATS: {cvScore}/100</Badge>
                     </div>
-                    <CVPreviewA4 cvDataJson={generatedCV} primaryColor={cvPrimaryColor} template={cvTemplate} />
-                    <div className="space-y-2">
+
+                    <div className="relative group cursor-zoom-in" onClick={() => setShowFullPreview(true)}>
+                      <CVPreviewA4 cvDataJson={generatedCV} primaryColor={cvPrimaryColor} template={cvTemplate} isModal={false} />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all flex items-center justify-center rounded-lg border border-zinc-200">
+                        <div className="bg-white/90 shadow-lg px-4 py-2 rounded-full flex items-center gap-2 scale-90 opacity-0 group-hover:opacity-100 group-hover:scale-100 transition-all font-bold text-xs text-primary">
+                          <Eye className="h-3.5 w-3.5" /> Agrandir l'aperçu
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2">
                       <Button className="w-full gap-2 gradient-primary text-white" onClick={handleDownloadPDF} disabled={isExporting}>
                         {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                        {isExporting ? 'Export...' : 'Télécharger PDF'}
-                      </Button>
-                      <Button variant="outline" className="w-full gap-2" onClick={async () => {
-                        await navigator.clipboard.writeText(generatedCV);
-                        toast({ title: 'Copié !', description: 'CV copié dans le presse-papier.' });
-                      }}>
-                        Copier le texte
+                        {isExporting ? 'Export en cours...' : 'Télécharger PDF'}
                       </Button>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Votre CV apparaîtra ici</p>
+                  <div className="text-center py-12 text-muted-foreground bg-muted/20 border-2 border-dashed rounded-xl">
+                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                    <p className="text-sm font-medium">Votre CV apparaîtra ici</p>
                   </div>
                 )}
               </CardContent>
@@ -1688,6 +1760,17 @@ function CVBuilderPage() {
           </div>
         </div>
       </div>
+      
+      {showFullPreview && generatedCV && (
+        <CVModalFullscreen 
+          cvDataJson={generatedCV} 
+          primaryColor={cvPrimaryColor} 
+          template={cvTemplate} 
+          onClose={() => setShowFullPreview(false)} 
+          onDownload={handleDownloadPDF}
+          isExporting={isExporting}
+        />
+      )}
     </div>
   );
 }
@@ -2123,17 +2206,33 @@ function JobSearchPage() {
 // DASHBOARD PAGE
 // ============================================
 function DashboardPage() {
-  const { applications, subscription, usage, getRemainingApplications, cancelSubscription, setCurrentView } = useAppStore();
+  const { applications, subscription, profile, cvScore, getRemainingApplications, cancelSubscription, setCurrentView, updateApplicationStatus } = useAppStore();
   const planName = subscription?.plan?.toUpperCase() || 'STARTER';
   const remaining = getRemainingApplications();
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
 
-  const stats = { total: applications.length || 12, responseRate: 35, views: 8, interviews: 3 };
-  const displayApps = applications.length > 0 ? applications : [
-    { id: '1', jobTitle: 'Développeur Full Stack', company: 'TechCorp', status: 'replied' as const, sentAt: '2024-01-15' },
-    { id: '2', jobTitle: 'Lead Developer', company: 'StartupVision', status: 'viewed' as const, sentAt: '2024-01-14' },
-    { id: '3', jobTitle: 'Backend Engineer', company: 'FinanceTech', status: 'sent' as const, sentAt: '2024-01-13' },
+  // Calculate real stats
+  const total = applications.length;
+  const views = applications.filter(a => ['viewed', 'replied', 'accepted', 'rejected'].includes(a.status)).length;
+  const interviews = applications.filter(a => ['replied', 'accepted'].includes(a.status)).length;
+  const responseRate = total > 0 ? Math.round((interviews / total) * 100) : 0;
+
+  const stats = { 
+    total, 
+    responseRate, 
+    views, 
+    interviews 
+  };
+
+  // Profile completion calculation
+  const profileFields = [
+    profile.firstName, profile.lastName, profile.email, profile.phone, 
+    profile.city, profile.summary, profile.targetJobTitle
   ];
+  const completedFields = profileFields.filter(f => !!f).length;
+  const profileCompletion = Math.round((completedFields / profileFields.length) * 100);
+
+  const displayApps = applications;
 
   const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; color: string }> = {
     pending: { label: 'En attente', icon: Clock, color: 'bg-yellow-500' },
@@ -2141,6 +2240,7 @@ function DashboardPage() {
     viewed: { label: 'Vue', icon: Eye, color: 'bg-purple-500' },
     replied: { label: 'Réponse', icon: CheckCircle, color: 'bg-green-500' },
     rejected: { label: 'Refusée', icon: XCircle, color: 'bg-red-500' },
+    accepted: { label: 'Acceptée', icon: CheckCircle, color: 'bg-emerald-500' },
   };
 
   const handleBillingPortal = async () => {
@@ -2191,35 +2291,111 @@ function DashboardPage() {
           <CardContent>
             <ScrollArea className="h-80">
               <div className="space-y-4">
-                {displayApps.map((app) => {
-                  const s = statusConfig[app.status];
-                  const Icon = s.icon;
-                  return (
-                    <div key={app.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${s.color}`} />
-                        <div><div className="font-medium">{app.jobTitle}</div><div className="text-sm text-muted-foreground">{app.company}</div></div>
+                {displayApps.length > 0 ? (
+                  displayApps.map((app) => {
+                    const s = statusConfig[app.status] || statusConfig.pending;
+                    const Icon = s.icon;
+                    const isAI = app.appliedVia === 'ai';
+                    
+                    return (
+                      <div key={app.id} className="group relative flex flex-col md:flex-row md:items-center justify-between p-4 bg-background border rounded-xl hover:border-primary/50 transition-all shadow-sm">
+                        <div className="flex items-start gap-4">
+                          <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${s.color} shadow-[0_0_8px] shadow-current`} />
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-gray-900 group-hover:text-primary transition-colors leading-tight">{app.jobTitle}</span>
+                              {isAI && (
+                                <Badge variant="secondary" className="h-5 text-[10px] gap-1 bg-primary/10 text-primary border-primary/20 shrink-0">
+                                  <Zap className="h-2.5 w-2.5" /> AGENT IA
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-medium">
+                              <div className="flex items-center gap-1.5">
+                                <Building2 className="h-3.5 w-3.5" />
+                                {app.company}
+                              </div>
+                              <span className="text-gray-300 hidden sm:inline">•</span>
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="h-3.5 w-3.5" />
+                                {app.sentAt ? new Date(app.sentAt).toLocaleDateString('fr-FR') : ''}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 md:mt-0 flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end">
+                          {app.coverLetter && (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 text-xs gap-2 shrink-0">
+                                  <FileText className="h-3.5 w-3.5" /> Voir Lettre
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+                                <DialogHeader>
+                                  <DialogTitle className="flex items-center gap-2">
+                                    <Sparkles className="h-5 w-5 text-primary" />
+                                    Lettre personnalisée par l'IA
+                                  </DialogTitle>
+                                  <DialogDescription className="font-bold text-gray-900">
+                                    {app.jobTitle} @ {app.company}
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <ScrollArea className="flex-1 mt-4 p-6 rounded-xl bg-muted/30 border-2 border-dashed border-muted-foreground/20 font-serif text-sm leading-relaxed whitespace-pre-wrap">
+                                  {app.coverLetter}
+                                </ScrollArea>
+                                <div className="flex justify-end gap-3 mt-6">
+                                  <Button variant="outline" onClick={async () => {
+                                    await navigator.clipboard.writeText(app.coverLetter);
+                                    toast({ title: 'Copié !', description: 'La lettre est dans votre presse-papier.' });
+                                  }} className="gap-2">
+                                    <Copy className="h-4 w-4" /> Copier le texte
+                                  </Button>
+                                  <DialogTrigger asChild>
+                                    <Button className="gradient-primary text-white">Fermer</Button>
+                                  </DialogTrigger>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          )}
+                          
+                          {app.sourceUrl && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              asChild 
+                              className={`h-8 text-xs gap-2 shrink-0 border-primary/20 hover:bg-primary/5 ${app.status === 'pending' ? 'bg-primary/10 border-primary animate-pulse' : ''}`}
+                              onClick={() => {
+                                if (app.status === 'pending') {
+                                  updateApplicationStatus(app.id, 'sent');
+                                  toast({ title: 'Statut mis à jour', description: 'Candidature marquée comme envoyée.' });
+                                }
+                              }}
+                            >
+                              <a href={app.sourceUrl} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="h-3.5 w-3.5" /> {app.status === 'pending' ? 'Finaliser Envoi' : 'Revoir l\'offre'}
+                              </a>
+                            </Button>
+                          )}
+
+                          <Badge 
+                            variant={app.status === 'sent' ? 'default' : 'outline'} 
+                            className={`h-8 gap-1.5 px-3 shrink-0 ${app.status === 'sent' && isAI ? 'bg-primary text-white hover:bg-primary/90' : ''}`}
+                          >
+                            <Icon className="h-3.5 w-3.5" />
+                            {isAI && app.status === 'sent' ? 'Action Agent IA' : (app.sourceUrl && app.status === 'pending' ? 'À Finaliser' : s.label)}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {app.sourceUrl && (
-                          <Button variant="outline" size="sm" asChild className="h-7 text-xs">
-                            <a href={app.sourceUrl} target="_blank" rel="noopener noreferrer">Postuler (Lien)</a>
-                          </Button>
-                        )}
-                        {app.coverLetter && (
-                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={async () => {
-                            await navigator.clipboard.writeText(app.coverLetter);
-                            toast({ title: 'Copié', description: 'Lettre de motivation copiée dans le presse-papier.' });
-                          }}>
-                            Copier Lettre
-                          </Button>
-                        )}
-                        <Badge variant="outline" className="gap-1"><Icon className="h-3 w-3" />{app.sourceUrl ? 'Préparée' : s.label}</Badge>
-                        <span className="text-xs text-muted-foreground">{app.sentAt ? new Date(app.sentAt).toLocaleDateString('fr-FR') : ''}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+                    <Briefcase className="h-8 w-8 mb-2 opacity-20" />
+                    <p>Aucune candidature pour le moment.</p>
+                  </div>
+                )}
               </div>
             </ScrollArea>
           </CardContent>
@@ -2281,8 +2457,8 @@ function DashboardPage() {
             <CardHeader><CardTitle className="text-lg">Performance</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2"><div className="flex justify-between text-sm"><span>Réponses</span><span className="font-medium">{stats.responseRate}%</span></div><Progress value={stats.responseRate} className="h-2" /></div>
-              <div className="space-y-2"><div className="flex justify-between text-sm"><span>Profil</span><span className="font-medium">75%</span></div><Progress value={75} className="h-2" /></div>
-              <div className="space-y-2"><div className="flex justify-between text-sm"><span>Score CV</span><span className="font-medium">92%</span></div><Progress value={92} className="h-2" /></div>
+              <div className="space-y-2"><div className="flex justify-between text-sm"><span>Profil</span><span className="font-medium">{profileCompletion}%</span></div><Progress value={profileCompletion} className="h-2" /></div>
+              <div className="space-y-2"><div className="flex justify-between text-sm"><span>Score CV</span><span className="font-medium">{cvScore}%</span></div><Progress value={cvScore} className="h-2" /></div>
             </CardContent>
           </Card>
         </div>
@@ -2295,9 +2471,10 @@ function DashboardPage() {
 // IMPORT CV PAGE
 // ============================================
 function ImportCVPage() {
-  const { importedCVFile, setImportedCVFile, clearImportedCVFile, setCurrentView } = useAppStore();
+  const { importedCVFile, setImportedCVFile, clearImportedCVFile, setCurrentView, profile } = useAppStore();
   const [isImporting, setIsImporting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [showApplyModal, setShowApplyModal] = useState(false);
 
   const handleFileUpload = async (file: File) => {
     setIsImporting(true);
@@ -2431,7 +2608,7 @@ function ImportCVPage() {
               <Button variant="outline" onClick={handleDownload}>
                 <Download className="h-4 w-4 mr-2" /> Télécharger
               </Button>
-              <Button className="gradient-primary text-white" onClick={() => setCurrentView('auto-apply')}>
+              <Button className="gradient-primary text-white shadow-lg" onClick={() => setShowApplyModal(true)}>
                 <Send className="h-4 w-4 mr-2" /> Utiliser pour candidater
               </Button>
               <Button variant="destructive" onClick={clearImportedCVFile}>
@@ -2523,6 +2700,116 @@ function ImportCVPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Application Summary Modal */}
+      <Dialog open={showApplyModal} onOpenChange={setShowApplyModal}>
+        <DialogContent className="max-w-2xl bg-zinc-50 border-white/20 shadow-2xl">
+          <DialogHeader className="pb-4 border-b border-zinc-200">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl">
+                <Rocket className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black uppercase tracking-tight">Prêt pour votre candidature ?</DialogTitle>
+                <DialogDescription>Récapitulatif de votre dossier avant lancement</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="py-6 space-y-6">
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* CV Section */}
+              <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><FileText className="h-4 w-4" /></div>
+                  <h4 className="font-bold text-sm uppercase tracking-wider text-zinc-600">Document Principal</h4>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-2xl">{importedCVFile ? getFileIcon(importedCVFile.extension) : '📄'}</div>
+                  <div className="overflow-hidden">
+                    <div className="font-extrabold truncate text-sm">{importedCVFile?.name || 'CV par défaut'}</div>
+                    <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
+                      {importedCVFile ? `${formatFileSize(importedCVFile.size)} • ${importedCVFile.extension}` : 'Fichier système'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Profile Context Section */}
+              <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-1.5 bg-purple-50 text-purple-600 rounded-lg"><User className="h-4 w-4" /></div>
+                  <h4 className="font-bold text-sm uppercase tracking-wider text-zinc-600">Profil Candidat</h4>
+                </div>
+                <div className="font-extrabold text-sm">{profile.firstName} {profile.lastName}</div>
+                <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest truncate">{profile.targetJobTitle || 'Poste non défini'}</div>
+              </div>
+            </div>
+
+            <div className="bg-zinc-800 text-white p-6 rounded-2xl shadow-xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-primary/30 transition-all duration-500" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  <h4 className="font-black text-sm uppercase tracking-[2px]">Intelligence Artificielle</h4>
+                </div>
+                <p className="text-zinc-300 text-sm leading-relaxed mb-4">
+                  Notre système va générer des <span className="text-white font-bold italic">lettres de motivation personnalisées</span> pour chaque offre d'emploi détectée, en utilisant votre CV importé comme base de connaissances.
+                </p>
+                <div className="flex items-center gap-4 text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                  <div className="flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Multi-langues</div>
+                  <div className="flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Optimisé ATS</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-xs font-black uppercase tracking-widest text-zinc-500">Choisissez votre stratégie</Label>
+              <div className="grid grid-cols-1 gap-3">
+                <button
+                  className="flex items-center justify-between p-4 bg-white border-2 border-primary rounded-xl text-left hover:shadow-md transition-all group"
+                  onClick={() => {
+                    toast({ title: "Stratégie activée", description: "Lancement de l'Auto-Apply avec Lettre de Motivation." });
+                    setCurrentView('auto-apply');
+                    setShowApplyModal(false);
+                  }}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-primary/10 rounded-lg group-hover:bg-primary group-hover:text-white transition-colors">
+                      <Zap className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="font-black text-sm uppercase tracking-tight">Avec Lettre de Motivation (Recommandé)</div>
+                      <div className="text-xs text-zinc-500 font-medium">L'IA génère un document unique par offre d'emploi.</div>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-primary" />
+                </button>
+
+                <button
+                  className="flex items-center justify-between p-4 bg-white border border-zinc-200 rounded-xl text-left hover:border-zinc-300 transition-all opacity-80"
+                  onClick={() => {
+                    toast({ title: "Stratégie simplifiée", description: "Lancement de l'Auto-Apply sans Lettre de Motivation." });
+                    setCurrentView('auto-apply');
+                    setShowApplyModal(false);
+                  }}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-zinc-100 rounded-lg">
+                      <X className="h-5 w-5 text-zinc-400" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm text-zinc-600">Envoyer sans Lettre de Motivation</div>
+                      <div className="text-xs text-zinc-400">Plus rapide, mais moins de chances de retenir l'attention.</div>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-zinc-300" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2531,22 +2818,69 @@ function ImportCVPage() {
 // AUTO-APPLY PAGE
 // ============================================
 function AutoApplyPage() {
-  const { profile, experiences, skills, jobPreferences, setJobPreferences, autoApply, setAutoApply, frequency, setFrequency, addApplication, subscription, importedCVFile } = useAppStore();
-  const [isRunning, setIsRunning] = useState(false);
+  const { 
+    profile, experiences, skills, 
+    jobPreferences, setJobPreferences, 
+    autoApply, setAutoApply, 
+    frequency, setFrequency, 
+    addApplication, subscription,
+    searchingJobs, setSearchingJobs,
+    selectedJobIds, setSelectedJobIds,
+    toggleJobSelection
+  } = useAppStore();
+  
+  const [isSearching, setIsSearching] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
   const [lastRun, setLastRun] = useState<string | null>(null);
   const [applicationsToday, setApplicationsToday] = useState(0);
 
-  const handleStartAutoApply = async () => {
-    setIsRunning(true);
+  const handleSearchJobs = async () => {
+    setIsSearching(true);
     try {
       const response = await fetch('/api/auto-apply/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'search',
+          profile,
+          preferences: jobPreferences,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setSearchingJobs(data.jobs);
+        setSelectedJobIds([]); // Reset selection
+        toast({ title: '🔍 Recherche terminée', description: `${data.jobs.length} offres trouvées.` });
+      } else {
+        toast({ title: 'Information', description: data.message || 'Aucune offre trouvée.' });
+      }
+    } catch {
+      toast({ title: 'Erreur', description: 'Impossible de rechercher des offres.', variant: 'destructive' });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleApplySelected = async () => {
+    if (selectedJobIds.length === 0) {
+      toast({ title: 'Attention', description: 'Veuillez sélectionner au moins un poste.', variant: 'destructive' });
+      return;
+    }
+
+    setIsApplying(true);
+    const selectedJobs = searchingJobs.filter(job => selectedJobIds.includes(job.id));
+
+    try {
+      const response = await fetch('/api/auto-apply/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'apply',
           profile,
           skills,
-          preferences: jobPreferences,
-          maxApplications: jobPreferences.maxApplicationsPerDay,
+          experiences,
+          selectedJobs,
         }),
       });
 
@@ -2555,27 +2889,24 @@ function AutoApplyPage() {
       if (data.success) {
         data.applications.forEach((app: any) => {
           addApplication({
-            id: crypto.randomUUID(),
-            jobId: app.jobId,
-            jobTitle: app.jobTitle,
-            company: app.company,
-            status: 'sent',
-            coverLetter: app.coverLetter,
-            sourceUrl: app.sourceUrl,
-            sentAt: app.sentAt
+            ...app,
+            appliedVia: 'ai'
           });
         });
 
         setApplicationsToday(prev => prev + data.applications.length);
         setLastRun(new Date().toISOString());
-        toast({ title: '🎉 Candidatures préparées !', description: "Retrouvez-les dans votre Tableau de bord pour les envoyer." });
-      } else {
-        toast({ title: 'Information', description: data.message || 'Aucune offre trouvée correspondant à vos critères.' });
+        setSearchingJobs([]); // Clear search after apply
+        setSelectedJobIds([]);
+        toast({ 
+          title: '🚀 Succès !', 
+          description: `${data.applications.length} candidatures IA préparées et ajoutées à votre dashboard.` 
+        });
       }
     } catch {
-      toast({ title: 'Erreur', description: 'Impossible de lancer les candidatures automatiques.', variant: 'destructive' });
+      toast({ title: 'Erreur', description: 'Échec de la génération des candidatures.', variant: 'destructive' });
     } finally {
-      setIsRunning(false);
+      setIsApplying(false);
     }
   };
 
@@ -2586,193 +2917,256 @@ function AutoApplyPage() {
           <Zap className="h-8 w-8 text-primary" />
           Auto-Candidature IA
         </h1>
-        <p className="text-muted-foreground">Laissez l'IA postuler automatiquement aux offres correspondant à votre profil</p>
+        <p className="text-muted-foreground">Laissez l'IA rechercher et postuler aux meilleures offres pour vous</p>
       </div>
 
-      {/* Status Card */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Statut</span>
-            {autoApply ? (
-              <Badge className="bg-green-500"><Play className="h-3 w-3 mr-1" />Actif</Badge>
-            ) : (
-              <Badge variant="secondary"><Pause className="h-3 w-3 mr-1" />Inactif</Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="text-center p-4 bg-muted rounded-lg">
-              <div className="text-2xl font-bold">{applicationsToday}</div>
-              <div className="text-sm text-muted-foreground">Candidatures aujourd'hui</div>
-            </div>
-            <div className="text-center p-4 bg-muted rounded-lg">
-              <div className="text-2xl font-bold">{jobPreferences.maxApplicationsPerDay}</div>
-              <div className="text-sm text-muted-foreground">Limite quotidienne</div>
-            </div>
-            <div className="text-center p-4 bg-muted rounded-lg">
-              <div className="text-2xl font-bold">{lastRun ? new Date(lastRun).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}</div>
-              <div className="text-sm text-muted-foreground">Dernière exécution</div>
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <Button
-              className="gradient-primary text-white flex-1"
-              onClick={handleStartAutoApply}
-              disabled={isRunning || !profile.firstName}
-            >
-              {isRunning ? (
-                <><RefreshCw className="h-4 w-4 animate-spin mr-2" />En cours...</>
-              ) : (
-                <><Zap className="h-4 w-4 mr-2" />Lancer maintenant</>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setAutoApply(!autoApply)}
-            >
-              {autoApply ? <><Pause className="h-4 w-4 mr-2" />Désactiver</> : <><Play className="h-4 w-4 mr-2" />Activer automatique</>}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Preferences */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Préférences de recherche
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Types de contrat</Label>
-              <div className="flex flex-wrap gap-2">
-                {['CDI', 'CDD', 'Freelance', 'Stage', 'Alternance'].map((type) => (
-                  <Badge
-                    key={type}
-                    variant={jobPreferences.jobTypes.includes(type) ? 'default' : 'outline'}
-                    className="cursor-pointer"
-                    onClick={() => {
-                      const types = jobPreferences.jobTypes.includes(type)
-                        ? jobPreferences.jobTypes.filter(t => t !== type)
-                        : [...jobPreferences.jobTypes, type];
-                      setJobPreferences({ jobTypes: types });
-                    }}
-                  >
-                    {type}
-                  </Badge>
-                ))}
+      <div className="grid lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          {/* Main Action Card */}
+          <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-background to-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Rocket className="h-5 w-5 text-primary" />
+                  <span>Agent Intelligent</span>
+                </div>
+                {autoApply ? (
+                  <Badge className="bg-green-500 animate-pulse">Actif</Badge>
+                ) : (
+                  <Badge variant="secondary">En veille</Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                L'IA analyse vos critères, trouve des postes et rédige des lettres de motivation sur mesure.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="text-center p-3 bg-background border rounded-lg shadow-sm">
+                  <div className="text-xl font-bold text-primary">{applicationsToday}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Aujourd'hui</div>
+                </div>
+                <div className="text-center p-3 bg-background border rounded-lg shadow-sm">
+                  <div className="text-xl font-bold text-primary">{jobPreferences.maxApplicationsPerDay}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Limite / jour</div>
+                </div>
+                <div className="text-center p-3 bg-background border rounded-lg shadow-sm hidden md:block">
+                  <div className="text-xl font-bold text-primary">{lastRun ? new Date(lastRun).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Dernière Run</div>
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label>Localisations recherchées</Label>
-              <Input
-                placeholder="Paris, Lyon, Remote..."
-                value={jobPreferences.locations.join(', ')}
-                onChange={(e) => setJobPreferences({ locations: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Mots-clés à inclure</Label>
-              <Input
-                placeholder="React, Node.js, Full Stack..."
-                value={jobPreferences.keywords.join(', ')}
-                onChange={(e) => setJobPreferences({ keywords: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <Label>Remote uniquement</Label>
-              <Switch
-                checked={jobPreferences.remoteOnly}
-                onCheckedChange={(checked) => setJobPreferences({ remoteOnly: checked })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Salaire minimum (k€)</Label>
-              <Input
-                type="number"
-                placeholder="40"
-                value={jobPreferences.minSalary || ''}
-                onChange={(e) => setJobPreferences({ minSalary: e.target.value ? parseInt(e.target.value) : null })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Max candidatures/jour</Label>
-              <Select
-                value={jobPreferences.maxApplicationsPerDay.toString()}
-                onValueChange={(v) => setJobPreferences({ maxApplicationsPerDay: parseInt(v) })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="3">3 candidatures</SelectItem>
-                  <SelectItem value="5">5 candidatures</SelectItem>
-                  <SelectItem value="10">10 candidatures</SelectItem>
-                  <SelectItem value="20">20 candidatures</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Schedule */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Planification
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Fréquence</Label>
-              <Select value={frequency} onValueChange={(v: 'daily' | 'weekly' | 'custom') => setFrequency(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">Quotidienne</SelectItem>
-                  <SelectItem value="weekly">Hebdomadaire</SelectItem>
-                  <SelectItem value="custom">Personnalisée</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm">
-              <p className="font-medium text-yellow-800 mb-1">⚠️ Configuration requise</p>
-              <p className="text-yellow-700">
-                Pour utiliser l'auto-candidature, assurez-vous que votre profil est complet et que votre CV est généré.
-              </p>
-            </div>
-
-            {!subscription || subscription.plan === 'starter' ? (
-              <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-                <p className="font-medium mb-2">🔓 Fonctionnalité Premium</p>
-                <p className="text-sm text-muted-foreground mb-3">
-                  L'auto-candidature automatique est disponible à partir du plan Pro.
-                </p>
-                <Button onClick={() => useAppStore.getState().setCurrentView('pricing')}>
-                  Voir les tarifs
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button 
+                  size="lg" 
+                  className="gradient-primary text-white flex-1 relative overflow-hidden group"
+                  onClick={handleSearchJobs}
+                  disabled={isSearching || isApplying || !profile.firstName}
+                >
+                  <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform" />
+                  {isSearching ? (
+                    <><RefreshCw className="h-5 w-5 animate-spin mr-2" />Recherche en cours...</>
+                  ) : (
+                    <><Search className="h-5 w-5 mr-2" />Rechercher des offres</>
+                  )}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => setAutoApply(!autoApply)}
+                >
+                  {autoApply ? <><Pause className="h-5 w-5 mr-2" />Désactiver l'automatisation</> : <><Play className="h-5 w-5 mr-2" />Activer le mode Auto</>}
                 </Button>
               </div>
-            ) : (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm">
-                <p className="font-medium text-green-800 mb-1">✅ Plan {subscription.plan.toUpperCase()}</p>
-                <p className="text-green-700">
-                  Vous avez accès à toutes les fonctionnalités d'auto-candidature.
+            </CardContent>
+          </Card>
+
+          {/* Search Results */}
+          {searchingJobs.length > 0 && (
+            <Card className="border-primary/30 shadow-lg">
+              <CardHeader className="bg-primary/5 border-b">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-primary" />
+                    Offres trouvées ({searchingJobs.length})
+                  </CardTitle>
+                  <div className="text-sm font-medium text-primary">
+                    {selectedJobIds.length} sélectionnée(s)
+                  </div>
+                </div>
+                <CardDescription>
+                  Sélectionnez les postes auxquels vous souhaitez postuler avec l'IA.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="h-[450px]">
+                  <div className="divide-y">
+                    {searchingJobs.map((job) => (
+                      <div key={job.id} className={`p-4 transition-colors hover:bg-muted/50 flex gap-4 items-start ${selectedJobIds.includes(job.id) ? 'bg-primary/5' : ''}`}>
+                        <Checkbox 
+                          id={`job-${job.id}`}
+                          checked={selectedJobIds.includes(job.id)}
+                          onCheckedChange={() => toggleJobSelection(job.id)}
+                          className="mt-1"
+                        />
+                        <div className="flex-1 space-y-1">
+                          <div className="flex justify-between items-start gap-2">
+                            <label htmlFor={`job-${job.id}`} className="font-bold text-lg cursor-pointer leading-tight group-hover:text-primary transition-colors">
+                              {job.title}
+                            </label>
+                            <Badge variant="outline" className="bg-background whitespace-nowrap">{job.location}</Badge>
+                          </div>
+                          <div className="text-primary font-semibold flex items-center gap-1.5">
+                            <Building2 className="h-4 w-4" />
+                            {job.company}
+                          </div>
+                          <p className="text-sm text-muted-foreground line-clamp-2 mt-2 leading-relaxed italic">
+                            {job.description?.substring(0, 150)}...
+                          </p>
+                          <div className="pt-2 flex items-center gap-4">
+                            <a href={job.url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
+                              <ExternalLink className="h-3 w-3" /> Voir l'offre originale
+                            </a>
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
+                              Rédiger via IA
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+              <div className="p-4 bg-muted/30 border-t flex justify-end">
+                <Button 
+                  className="gradient-primary text-white"
+                  disabled={selectedJobIds.length === 0 || isApplying}
+                  onClick={handleApplySelected}
+                >
+                  {isApplying ? (
+                    <><RefreshCw className="h-4 w-4 animate-spin mr-2" />Rédaction des lettres...</>
+                  ) : (
+                    <><Wand2 className="h-4 w-4 mr-2" />Lancer l'auto-candidature ({selectedJobIds.length})</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {searchingJobs.length === 0 && !isSearching && (
+             <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl bg-muted/20 text-muted-foreground">
+                <div className="p-4 bg-background rounded-full shadow-sm mb-4">
+                  <Search className="h-8 w-8 opacity-50" />
+                </div>
+                <p className="text-center font-medium max-w-[300px]">
+                  Utilisez les filtres à droite pour trouver les meilleures opportunités.
+                </p>
+             </div>
+          )}
+        </div>
+
+        {/* Sidebar Controls */}
+        <div className="space-y-6">
+          <Card className="sticky top-24">
+            <CardHeader className="pb-3 border-b bg-muted/10">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Filter className="h-4 w-4 text-primary" />
+                Paramètres de l'Agent
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              <div className="space-y-3">
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Type de contrats</Label>
+                <div className="flex flex-wrap gap-2">
+                  {['CDI', 'CDD', 'Freelance', 'Stage', 'Alternance'].map((type) => (
+                    <Badge
+                      key={type}
+                      variant={jobPreferences.jobTypes.includes(type) ? 'default' : 'outline'}
+                      className={`cursor-pointer transition-all ${jobPreferences.jobTypes.includes(type) ? 'scale-105 shadow-md' : 'opacity-70 hover:opacity-100'}`}
+                      onClick={() => {
+                        const types = jobPreferences.jobTypes.includes(type)
+                          ? jobPreferences.jobTypes.filter(t => t !== type)
+                          : [...jobPreferences.jobTypes, type];
+                        setJobPreferences({ jobTypes: types });
+                      }}
+                    >
+                      {type}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Où chercher ?</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Ville, Pays ou Remote..."
+                    value={jobPreferences.locations.join(', ')}
+                    onChange={(e) => setJobPreferences({ locations: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Expertise / Mots-clés</Label>
+                <div className="relative">
+                  <Target className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    placeholder="React, Lead, Manager..."
+                    value={jobPreferences.keywords.join(', ')}
+                    onChange={(e) => setJobPreferences({ keywords: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-semibold">Télétravail total</Label>
+                  <p className="text-[11px] text-muted-foreground">Uniquement 100% remote</p>
+                </div>
+                <Switch
+                  checked={jobPreferences.remoteOnly}
+                  onCheckedChange={(checked) => setJobPreferences({ remoteOnly: checked })}
+                />
+              </div>
+
+              <div className="space-y-4 pt-2">
+                <div className="flex justify-between items-end">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Limite quotidienne</Label>
+                  <span className="text-sm font-bold text-primary">{jobPreferences.maxApplicationsPerDay} candidatures/jour</span>
+                </div>
+                <Select
+                  value={jobPreferences.maxApplicationsPerDay.toString()}
+                  onValueChange={(v) => setJobPreferences({ maxApplicationsPerDay: parseInt(v) })}
+                >
+                  <SelectTrigger className="w-full bg-background"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">3 candidatures</SelectItem>
+                    <SelectItem value="5">5 candidatures (Recommandé)</SelectItem>
+                    <SelectItem value="10">10 candidatures</SelectItem>
+                    <SelectItem value="20">20 candidatures</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Separator />
+
+              <div className="bg-primary/5 p-4 rounded-xl border border-primary/10">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-bold text-primary">PLAN PRO</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  Vos informations sont protégées. L'IA génère des contenus uniques pour éviter le spam.
                 </p>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

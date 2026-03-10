@@ -41,6 +41,37 @@ export async function POST(request: NextRequest) {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 15;
+    
+    // Auto-scaling logic
+    const estimateHeight = () => {
+      let h = 0;
+      const isSingleCol = template === 'minimal' || template === 'professional' || template === 'classic';
+      if (isSingleCol) {
+        h = 20 + 15 + 15; // Header space
+      } else {
+        h = 30 + 12 + 10 + 25; // Sidebar templates header space
+      }
+      
+      if (aiSummary) h += (aiSummary.length / 80) * 10;
+      
+      if (educations.length > 0) h += 12 + educations.length * 16;
+      if (experiences.length > 0) {
+        h += 12;
+        experiences.forEach((exp: any) => {
+          h += 15; 
+          const achs = exp.achievements || (exp.description ? [exp.description] : []);
+          h += achs.length * 6;
+        });
+      }
+      if (skills.length > 0 || languages.length > 0) h += 15 + Math.max(languages.length * 8, skills.length * 8);
+      return h + 20; 
+    };
+
+    const estHeight = estimateHeight();
+    const availableHeight = pageHeight - margin * 2;
+    const globalScale = Math.min(1.0, availableHeight / estHeight);
+    const baseFontSize = 10 * globalScale;
+
     let yPosition = margin;
 
     // Color utilities
@@ -76,7 +107,7 @@ export async function POST(request: NextRequest) {
       lineHeight?: number;
     } = {}): number => {
       if (!text) return 0;
-      const { fontSize = 10, fontStyle = 'normal', color = '#333333', align = 'left', maxWidth, lineHeight = 1.4 } = options;
+      const { fontSize = baseFontSize, fontStyle = 'normal', color = '#333333', align = 'left', maxWidth, lineHeight = 1.4 } = options;
       
       doc.setFontSize(fontSize);
       doc.setFont('helvetica', fontStyle);
@@ -112,239 +143,338 @@ export async function POST(request: NextRequest) {
     // UNIVERSAL SIDEBAR LAYOUT (For Modern/Elegant/Creative)
     // ============================================
     if (template === 'modern' || template === 'elegant' || template === 'creative') {
-      const sidebarWidth = pageWidth * 0.35;
-      const contentX = sidebarWidth + 10;
-      const contentWidth = pageWidth - contentX - margin;
+      const sidebarWidth = pageWidth * 0.33;
+      const contentX = sidebarWidth + 4; 
+      const contentWidth = pageWidth - contentX - 18; // Increased right margin from 15 to 18
       const sidebarMargin = 8;
 
       // Sidebar background
       setFillColor(primaryColor);
       doc.rect(0, 0, sidebarWidth, pageHeight, 'F');
 
-      // Sidebar: Photo/Avatar placeholder
-      setFillColor(getLighterColor(primaryColor, 80));
-      doc.circle(sidebarWidth / 2, 25, 15, 'F');
+      // Sidebar: Profil Picture Placeholder (Image 2 style)
+      setFillColor(getLighterColor(primaryColor, 90));
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(sidebarMargin + 2, 15, sidebarWidth - (sidebarMargin + 2) * 2, sidebarWidth - (sidebarMargin + 2) * 2, 3, 3, 'FD');
       
-      // Sidebar: Profil
-      let sideY = 55;
-      addText('PROFIL', sidebarWidth / 2, sideY, { fontSize: 13, fontStyle: 'bold', color: '#ffffff', align: 'center' });
-      doc.setLineWidth(0.2);
-      doc.setDrawColor(200, 200, 200); // white/30 look
-      doc.line(sidebarMargin + 5, sideY + 2, sidebarWidth - sidebarMargin - 5, sideY + 2);
-      sideY += 10;
+      // Sidebar: Sections
+      let sideY = 15 + sidebarWidth - (sidebarMargin + 2) * 2 + 15;
       
-      const summaryText = aiSummary || "Déterminé, sérieux, autonome et conscient du travail qui m'attend.";
-      const summaryHeight = addText(summaryText, sidebarWidth / 2, sideY, { 
-        fontSize: 10.5, 
-        color: '#ffffff', 
-        maxWidth: sidebarWidth - sidebarMargin * 2,
-        align: 'center',
-        lineHeight: 1.4
-      });
-      sideY += summaryHeight + 20;
-
-      // Sidebar: Contact
-      addText('CONTACT', sidebarWidth / 2, sideY, { fontSize: 13, fontStyle: 'bold', color: '#ffffff', align: 'center' });
-      doc.line(sidebarMargin + 5, sideY + 2, sidebarWidth - sidebarMargin - 5, sideY + 2);
-      sideY += 10;
-
-      const contactX = sidebarMargin + 5;
-      if (profile?.city || aiHeader.location) {
-        addText(profile.city || aiHeader.location, contactX, sideY, { fontSize: 10.5, color: '#ffffff' });
-        sideY += 7;
-      }
-      if (profile?.email || aiHeader.email) {
-        addText(profile.email || aiHeader.email, contactX, sideY, { fontSize: 10.5, color: '#ffffff', maxWidth: sidebarWidth - sidebarMargin * 2 - 5 });
-        sideY += 7;
-      }
-      if (profile?.phone || aiHeader.phone) {
-        addText(profile.phone || aiHeader.phone, contactX, sideY, { fontSize: 10.5, color: '#ffffff' });
-        sideY += 7;
-      }
-      if (profile?.linkedin || aiHeader.linkedin) {
-        addText(profile.linkedin || aiHeader.linkedin, contactX, sideY, { fontSize: 10.5, color: '#ffffff', maxWidth: sidebarWidth - sidebarMargin * 2 - 5 });
-        sideY += 7;
-      }
-
-      // Sidebar: Interests
-      if (interests.length > 0) {
-        sideY += 15;
-        addText('INTÉRÊTS', sidebarWidth / 2, sideY, { fontSize: 13, fontStyle: 'bold', color: '#ffffff', align: 'center' });
-        doc.line(sidebarMargin + 5, sideY + 2, sidebarWidth - sidebarMargin - 5, sideY + 2);
+      const drawSideSection = (title: string, content: any, type: 'text' | 'contact' | 'list') => {
+        addText(title, sidebarWidth / 2, sideY, { fontSize: 11 * globalScale, fontStyle: 'bold', color: '#ffffff', align: 'center' });
+        doc.setLineWidth(0.2);
+        doc.setDrawColor(255, 255, 255);
+        doc.line(sidebarMargin + 4, sideY + 2, sidebarWidth - sidebarMargin - 4, sideY + 2);
         sideY += 10;
+        
+        if (type === 'text') {
+           sideY += addText(content, sidebarWidth / 2, sideY, { 
+            fontSize: 9 * globalScale, 
+            color: '#ffffff', 
+            maxWidth: sidebarWidth - sidebarMargin * 2,
+            align: 'center',
+            lineHeight: 1.5
+          }) + 12 * globalScale;
+        } else if (type === 'contact') {
+          content.forEach((c: any) => {
+            if (!c.text) return;
+            addText(c.text, sidebarWidth / 2, sideY, { fontSize: 8.5 * globalScale, color: '#ffffff', align: 'center', maxWidth: sidebarWidth - 10 });
+            sideY += 7 * globalScale;
+          });
+          sideY += 5 * globalScale;
+        } else if (type === 'list') {
+          content.forEach((item: string) => {
+            addText(`• ${item}`, sidebarWidth / 2, sideY, { fontSize: 8.5 * globalScale, color: '#ffffff', align: 'center' });
+            sideY += 6 * globalScale;
+          });
+          sideY += 10 * globalScale;
+        }
+      };
 
-        interests.forEach((interest: string) => {
-          addText(interest, contactX, sideY, { fontSize: 10.5, color: '#ffffff' });
-          sideY += 7;
-        });
-      }
+      drawSideSection('PROFIL', aiSummary || "", 'text');
+      drawSideSection('CONTACT', [
+        { text: profile.city || aiHeader.location },
+        { text: profile.email || aiHeader.email },
+        { text: profile.phone || aiHeader.phone },
+        { text: "Permis B" }
+      ], 'contact');
+      if (interests.length > 0) drawSideSection('INTÉRÊTS', interests, 'list');
 
       // Main Content
-      yPosition = 25; // Matches pt-16
+      yPosition = 30; 
       
+      // Header Accent Line
+      setFillColor(primaryColor);
+      doc.rect(contentX - 6, yPosition - 10, 2, 25, 'F');
+
       // Name
-      const firstName = aiHeader.fullName?.split(' ')[0] || profile?.firstName || 'Prénom';
-      const lastName = aiHeader.fullName?.split(' ').slice(1).join(' ') || profile?.lastName || 'Nom';
+      const firstName = profile?.firstName || 'PRÉNOM';
+      const lastName = profile?.lastName || 'NOM';
       
-      doc.setFontSize(36); // text-5xl
-      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(38 * globalScale); 
+      doc.setFont('helvetica', 'bold');
       setColor('#333333');
       doc.text(firstName.toUpperCase(), contentX, yPosition);
-      const nameWidth = doc.getTextWidth(firstName.toUpperCase());
+      yPosition += 12 * globalScale;
       doc.setFont('helvetica', 'bold');
-      doc.text(lastName.toUpperCase(), contentX + nameWidth + 3, yPosition);
-      yPosition += 12;
+      setColor('#999999');
+      doc.text(lastName.toUpperCase(), contentX, yPosition);
+      yPosition += 10 * globalScale;
 
       // Title
-      addText((aiHeader.targetJobTitle || profile?.targetJobTitle || '').toUpperCase(), contentX, yPosition, { 
-        fontSize: 15, // text-xl
-        color: '#666666',
+      addText((aiHeader.targetJobTitle || profile?.targetJobTitle || 'DÉVELOPPEUR').toUpperCase(), contentX, yPosition, { 
+        fontSize: 15 * globalScale,
+        color: '#bbbbbb',
         fontStyle: 'bold'
       });
-      yPosition += 25;
+      yPosition += 25 * globalScale;
+
+      const drawSectionHeader = (title: string, x: number, y: number, width: number) => {
+        // Accent bar
+        setFillColor(primaryColor);
+        doc.rect(x, y - 4, 14, 1.2, 'F');
+        // Title
+        addText(title, x + 18, y, { fontSize: 13 * globalScale, fontStyle: 'bold', color: '#333333' });
+        // Divider
+        const titleWidth = doc.getTextWidth(title);
+        setDrawColor('#f0f0f0');
+        doc.setLineWidth(0.3);
+        doc.line(x + 22 + titleWidth, y - 1, x + width, y - 1);
+      };
 
       // Formation
       if (educations.length > 0) {
-        addText('FORMATION', contentX, yPosition, { fontSize: 13.5, fontStyle: 'bold', color: '#333333' });
-        doc.setLineWidth(0.4);
-        setDrawColor('#cccccc');
-        doc.line(contentX + 45, yPosition - 1, contentX + contentWidth, yPosition - 1);
-        yPosition += 8;
+        drawSectionHeader('FORMATION', contentX, yPosition, contentWidth);
+        yPosition += 12 * globalScale;
 
         educations.forEach((edu: any) => {
-          let period = edu.period || "";
-          if (!period && (edu.startDate || edu.endDate)) {
-            const start = edu.startDate || "";
-            const end = edu.current ? 'Présent' : (edu.endDate || "");
-            period = `${start} ${start && end ? '-' : ''} ${end}`.trim();
-          }
+          let period = edu.period || `${edu.startDate || ''} - ${edu.endDate || ''}`;
+          addText(period, contentX, yPosition, { fontSize: 9.5 * globalScale, fontStyle: 'bold', color: '#aaaaaa' });
           
-          if (period) {
-            addText(period, contentX, yPosition, { fontSize: 10.5, fontStyle: 'bold' });
-          }
-          addText(edu.degree || '', contentX + 45, yPosition, { fontSize: 10.5, fontStyle: 'bold' });
-          yPosition += 5;
-          
-          if (edu.school && !(edu.degree && edu.degree.toLowerCase().includes(edu.school.toLowerCase()))) {
-            addText(edu.school, contentX + 45, yPosition, { fontSize: 10.5, color: '#666666' });
-            yPosition += 8;
-          } else {
-            yPosition += 3;
-          }
+          addText(edu.degree || '', contentX + 38 * globalScale, yPosition, { fontSize: 11 * globalScale, fontStyle: 'bold' });
+          yPosition += 6 * globalScale;
+          addText(edu.school || '', contentX + 38 * globalScale, yPosition, { fontSize: 10 * globalScale, color: '#888888', fontStyle: 'italic' });
+          yPosition += 10 * globalScale;
         });
-        yPosition += 5;
+        yPosition += 5 * globalScale;
       }
 
       // Experience
-      const entryColWidth = 45; 
       if (experiences.length > 0) {
-        addText('EXPÉRIENCE', contentX, yPosition, { fontSize: 13.5, fontStyle: 'bold', color: '#333333' });
-        setFillColor(primaryColor);
-        doc.rect(contentX + 33, yPosition - 1.5, 12, 0.6, 'F');
-        setDrawColor('#cccccc');
-        doc.line(contentX + 47, yPosition - 1.2, contentX + contentWidth, yPosition - 1.2);
-        yPosition += 10;
+        drawSectionHeader('EXPÉRIENCE', contentX, yPosition, contentWidth);
+        yPosition += 12 * globalScale;
 
         experiences.forEach((exp: any) => {
-          if (yPosition > pageHeight - 50) {
-            doc.addPage();
-            yPosition = margin;
-          }
 
-          let period = exp.period || "";
-          if (!period && (exp.startDate || exp.endDate)) {
-            const start = exp.startDate || "";
-            const end = exp.current ? 'Présent' : (exp.endDate || "");
-            period = `${start} ${start && end ? '-' : ''} ${end}`.trim();
-          }
+          addText(exp.period || `${exp.startDate || ''} - ${exp.endDate || ''}`, contentX, yPosition, { fontSize: 10.5 * globalScale, fontStyle: 'bold', color: '#333333' });
+          addText(exp.company || '', contentX, yPosition + 6 * globalScale, { fontSize: 9 * globalScale, fontStyle: 'bold', color: '#bbbbbb' });
 
-          if (period) {
-            addText(period, contentX, yPosition, { fontSize: 10.5, fontStyle: 'bold' });
-          }
-          addText(exp.company || '', contentX, yPosition + 5, { fontSize: 10.5, fontStyle: 'bold', color: '#666666' });
+          addText((exp.position || '').toUpperCase(), contentX + 38 * globalScale, yPosition, { fontSize: 11.5 * globalScale, fontStyle: 'bold' });
+          yPosition += 7 * globalScale;
           
-          addText((exp.position || '').toUpperCase(), contentX + entryColWidth, yPosition, { fontSize: 10.5, fontStyle: 'bold' });
-          yPosition += 5;
-          
-          const achList = exp.achievements || (exp.description ? [exp.description] : ["Description à compléter"]);
+          const achList = exp.achievements || (exp.description ? [exp.description] : []);
           achList.forEach((ach: string) => {
-            const h = addText(`• ${ach}`, contentX + entryColWidth, yPosition, { 
-              fontSize: 9.5, 
-              maxWidth: contentWidth - entryColWidth, 
-              color: '#444444', 
-              lineHeight: 1.3 
+            const h = addText(`• ${ach}`, contentX + 38 * globalScale, yPosition, { 
+              fontSize: 9 * globalScale, 
+              maxWidth: contentWidth - 38 * globalScale, 
+              color: '#555555', 
+              lineHeight: 1.4 
             });
-            yPosition += h + 2;
+            yPosition += h + 2.5 * globalScale;
           });
-          yPosition += 6;
+          yPosition += 8 * globalScale;
         });
+        yPosition += 5 * globalScale;
       }
 
-      // Skills Bottom Section
+      // Skills & Languages (Grid Layout)
       if (skills.length > 0 || languages.length > 0) {
-        yPosition += 10;
-        if (yPosition > pageHeight - 40) {
-          doc.addPage();
-          yPosition = margin;
-          if (template === 'modern' || template === 'elegant' || template === 'creative') {
-             setFillColor(primaryColor);
-             doc.rect(0, 0, pageWidth * 0.35, pageHeight, 'F');
-          }
-        }
-
-        addText('COMPÉTENCES', contentX, yPosition, { fontSize: 13.5, fontStyle: 'bold', color: '#333333' });
-        setFillColor(primaryColor);
-        doc.rect(contentX + 37, yPosition - 1.5, 12, 0.6, 'F');
-        setDrawColor('#cccccc');
-        doc.line(contentX + 52, yPosition - 1.2, contentX + contentWidth, yPosition - 1.2);
-        yPosition += 12;
-
+        drawSectionHeader('COMPÉTENCES', contentX, yPosition, contentWidth);
+        yPosition += 12 * globalScale;
+ 
+        const startY = yPosition;
         const colWidth = contentWidth / 2;
-        const skillsSectionY = yPosition;
-        
-        // Languages
-        let languagesY = skillsSectionY;
+
+        // Languages Column
         if (languages.length > 0) {
-          addText('LANGUES', contentX, languagesY, { fontSize: 10.5, fontStyle: 'bold' });
-          languagesY += 8;
+          addText('LANGUES', contentX, yPosition, { fontSize: 10 * globalScale, fontStyle: 'bold' });
+          yPosition += 7 * globalScale;
           languages.forEach((lang: any) => {
-            addText(`${lang.name}`, contentX, languagesY, { fontSize: 10 });
-            const levelX = contentX + doc.getTextWidth(lang.name) + 2;
-            addText(`: ${lang.level}`, levelX, languagesY, { fontSize: 10, color: '#666666' });
-            languagesY += 6;
+            const levelText = lang.level || '';
+            const levelWidth = doc.getTextWidth(levelText);
+            const nameMaxWidth = colWidth - levelWidth - 8;
+            
+            const h = addText(lang.name, contentX, yPosition, { 
+              fontSize: 9.5 * globalScale, 
+              fontStyle: 'bold', 
+              color: '#444444',
+              maxWidth: nameMaxWidth
+            });
+            
+            addText(levelText, contentX + colWidth - 5, yPosition, { fontSize: 9 * globalScale, color: '#888888', align: 'right' });
+            yPosition += Math.max(h, 6 * globalScale);
           });
         }
 
-        // Software Skills
-        let softwareY = skillsSectionY;
+        // Logiciels Column
+        let softwareY = startY;
         if (skills.length > 0) {
-          addText('LOGICIELS MAÎTRISÉS', contentX + colWidth, softwareY, { fontSize: 10.5, fontStyle: 'bold' });
-          softwareY += 8;
+          addText('LOGICIELS', contentX + colWidth, softwareY, { fontSize: 10 * globalScale, fontStyle: 'bold' });
+          softwareY += 7 * globalScale;
           skills.forEach((skill: any) => {
             const skillName = skill.name || skill;
-            addText(`• ${skillName}`, contentX + colWidth, softwareY, { fontSize: 10, maxWidth: colWidth - 5 });
-            softwareY += 6;
+            const h = addText(`• ${skillName}`, contentX + colWidth, softwareY, { 
+              fontSize: 9 * globalScale, 
+              fontStyle: 'bold', 
+              color: '#555555',
+              maxWidth: colWidth - 5
+            });
+            softwareY += h + 1 * globalScale;
           });
         }
         
-        yPosition = Math.max(languagesY, softwareY) + 10;
+        yPosition = Math.max(yPosition, softwareY) + 15 * globalScale;
       }
     }
 
     // ============================================
-    // TEMPLATE: MINIMAL (unchanged but cleaned)
+    // TEMPLATES: MINIMAL, PROFESSIONAL, CLASSIC (Single Column)
     // ============================================
-    else if (template === 'minimal') {
-      // (Keep existing minimal template logic but simplified if needed)
-      addText(`${profile?.firstName || ''} ${profile?.lastName || ''}`.trim(), margin, yPosition, { fontSize: 28, fontStyle: 'bold' });
-      yPosition += 12;
-      const contactParts = [profile?.email, profile?.phone, profile?.city].filter(Boolean);
-      addText(contactParts.join('  |  '), margin, yPosition, { fontSize: 9, color: '#888888' });
-      yPosition += 10;
-      doc.line(margin, yPosition, pageWidth - margin, yPosition);
-      yPosition += 8;
-      if (aiSummary) yPosition += addText(aiSummary, margin, yPosition, { fontSize: 10, maxWidth: pageWidth - margin * 2, lineHeight: 1.6 }) + 10;
-      // ... (rest of minimal logic)
+    else {
+      // These templates all use the single column layout in page.tsx
+      const contentWidth = pageWidth - margin * 2;
+      
+      // Header
+      const fullName = aiHeader.fullName || `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'VOTRE NOM';
+      addText(fullName.toUpperCase(), margin, yPosition, { fontSize: 24 * globalScale, fontStyle: 'bold' });
+      
+      const contactParts = [
+        profile?.email || aiHeader.email, 
+        profile?.phone || aiHeader.phone, 
+        profile?.city || aiHeader.location
+      ].filter(Boolean);
+      addText(contactParts.join('  |  '), pageWidth - margin, yPosition + 5 * globalScale, { fontSize: 9 * globalScale, color: '#888888', align: 'right' });
+      yPosition += 15 * globalScale;
+      
+      // Accent Line
+      setFillColor(primaryColor);
+      doc.rect(margin, yPosition, contentWidth, 0.5 * globalScale, 'F');
+      yPosition += 6 * globalScale;
+      
+      // Title
+      addText((aiHeader.targetJobTitle || profile?.targetJobTitle || 'DÉVELOPPEUR').toUpperCase(), margin, yPosition, { 
+        fontSize: 14 * globalScale,
+        color: '#666666',
+        fontStyle: 'bold'
+      });
+      yPosition += 15 * globalScale;
+      
+      if (aiSummary) {
+        yPosition += addText(aiSummary, margin, yPosition, { 
+          fontSize: 10 * globalScale, 
+          maxWidth: contentWidth, 
+          lineHeight: 1.6,
+          fontStyle: 'italic',
+          color: '#555555'
+        }) + 12 * globalScale;
+      }
+      
+      const drawMinimalHeader = (title: string, y: number) => {
+        addText(title, margin, y, { fontSize: 13 * globalScale, fontStyle: 'bold', color: primaryColor });
+        yPosition += 8 * globalScale;
+      };
+
+      // Formation
+      if (educations.length > 0) {
+        drawMinimalHeader('FORMATION', yPosition);
+        educations.forEach((edu: any) => {
+          const degree = edu.degree || '';
+          const school = edu.school || '';
+          const displayPeriod = (edu.period || `${edu.startDate || ''} - ${edu.endDate || ''}`).replace(/ - $/, '').replace(/^ - /, '');
+          
+          addText(degree, margin, yPosition, { fontSize: 11 * globalScale, fontStyle: 'bold' });
+          addText(displayPeriod, pageWidth - margin, yPosition, { 
+            fontSize: 9 * globalScale, 
+            color: '#888888',
+            align: 'right'
+          });
+          yPosition += 5 * globalScale;
+          
+          if (school && !degree.toLowerCase().includes(school.toLowerCase())) {
+            addText(school, margin, yPosition, { fontSize: 10 * globalScale, color: '#666666' });
+            yPosition += 10 * globalScale;
+          } else {
+            yPosition += 5 * globalScale;
+          }
+        });
+        yPosition += 5 * globalScale;
+      }
+
+      // Experience
+      if (experiences.length > 0) {
+        drawMinimalHeader('EXPÉRIENCE PROFESSIONNELLE', yPosition);
+        experiences.forEach((exp: any) => {
+          const displayPeriod = (exp.period || `${exp.startDate || ''} - ${exp.endDate || ''}`).replace(/ - $/, '').replace(/^ - /, '');
+          addText(exp.position || '', margin, yPosition, { fontSize: 12 * globalScale, fontStyle: 'bold' });
+          addText(displayPeriod, pageWidth - margin, yPosition, { 
+            fontSize: 9 * globalScale, 
+            color: '#888888',
+            align: 'right'
+          });
+          yPosition += 6 * globalScale;
+          
+          const company = exp.company || '';
+          if (company && !(exp.position || '').toLowerCase().includes(company.toLowerCase())) {
+            addText(company, margin, yPosition, { fontSize: 10.5 * globalScale, color: primaryColor, fontStyle: 'bold' });
+            yPosition += 7 * globalScale;
+          } else {
+            yPosition += 2 * globalScale;
+          }
+          
+          const achList = exp.achievements || (exp.description ? [exp.description] : []);
+          achList.forEach((ach: string) => {
+            const h = addText(`• ${ach}`, margin + 5 * globalScale, yPosition, { 
+              fontSize: 9 * globalScale, 
+              maxWidth: contentWidth - 5 * globalScale, 
+              color: '#555555', 
+              lineHeight: 1.4 
+            });
+            yPosition += h + 2 * globalScale;
+          });
+          yPosition += 8 * globalScale;
+        });
+      }
+
+      // Skills & Interests
+      if (skills.length > 0 || interests.length > 0) {
+        yPosition += 5 * globalScale;
+        const colWidth = contentWidth / 2;
+        const startY = yPosition;
+        
+        if (skills.length > 0) {
+          drawMinimalHeader('COMPÉTENCES', yPosition);
+          const skillNames = skills.map((s: any) => s.name || s);
+          yPosition += addText(skillNames.join('  •  '), margin, yPosition, {
+            fontSize: 9 * globalScale,
+            maxWidth: colWidth - 10,
+            color: '#555555',
+            lineHeight: 1.5
+          });
+        }
+        
+        if (interests.length > 0) {
+          let intY = startY;
+          addText('CENTRES D\'INTÉRÊT', margin + colWidth, intY, { fontSize: 13 * globalScale, fontStyle: 'bold', color: primaryColor });
+          intY += 8 * globalScale;
+          addText(interests.join('  •  '), margin + colWidth, intY, {
+            fontSize: 9 * globalScale,
+            maxWidth: colWidth - 10,
+            color: '#555555',
+            lineHeight: 1.5
+          });
+        }
+      }
     }
 
     // ============================================

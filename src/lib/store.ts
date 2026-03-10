@@ -220,7 +220,9 @@ export interface Application {
   company: string;
   status: 'pending' | 'sent' | 'viewed' | 'replied' | 'rejected' | 'accepted';
   coverLetter: string;
+  sourceUrl?: string;
   sentAt: string;
+  appliedVia?: 'manual' | 'ai';
 }
 
 export interface PaymentHistory {
@@ -279,6 +281,8 @@ interface AppState {
   // Generated CV
   generatedCV: string;
   setGeneratedCV: (cv: string) => void;
+  cvScore: number;
+  setCvScore: (score: number) => void;
 
   // CV Template Settings
   cvTemplate: string;
@@ -303,6 +307,13 @@ interface AppState {
     maxApplicationsPerDay: number;
   };
   setJobPreferences: (prefs: Partial<AppState['jobPreferences']>) => void;
+
+  // Auto-Apply Search & Selection
+  searchingJobs: any[];
+  setSearchingJobs: (jobs: any[]) => void;
+  selectedJobIds: string[];
+  setSelectedJobIds: (ids: string[]) => void;
+  toggleJobSelection: (id: string) => void;
 
   // Imported CV File
   importedCVFile: {
@@ -418,6 +429,8 @@ export const useAppStore = create<AppState>()(
 
       generatedCV: '',
       setGeneratedCV: (cv) => set({ generatedCV: cv }),
+      cvScore: 0,
+      setCvScore: (score) => set({ cvScore: score }),
 
       // CV Template Settings
       cvTemplate: 'modern',
@@ -442,6 +455,16 @@ export const useAppStore = create<AppState>()(
       },
       setJobPreferences: (prefs) => set((state) => ({
         jobPreferences: { ...state.jobPreferences, ...prefs }
+      })),
+
+      searchingJobs: [],
+      setSearchingJobs: (jobs) => set({ searchingJobs: jobs }),
+      selectedJobIds: [],
+      setSelectedJobIds: (ids) => set({ selectedJobIds: ids }),
+      toggleJobSelection: (id) => set((state) => ({
+        selectedJobIds: state.selectedJobIds.includes(id)
+          ? state.selectedJobIds.filter(jid => jid !== id)
+          : [...state.selectedJobIds, id]
       })),
 
       // Imported CV File
@@ -589,6 +612,7 @@ export const useAppStore = create<AppState>()(
         paymentHistory: state.paymentHistory,
         cvTemplate: state.cvTemplate,
         cvPrimaryColor: state.cvPrimaryColor,
+        cvScore: state.cvScore,
       }),
     }
   )
