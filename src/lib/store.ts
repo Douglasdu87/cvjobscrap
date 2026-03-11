@@ -15,6 +15,7 @@ export interface SubscriptionPlan {
   features: string[];
   limits: {
     applicationsPerWeek: number; // -1 = unlimited
+    applicationsPerDay: number; // -1 = unlimited
     cvGeneration: number; // -1 = unlimited
     historyDays: number; // -1 = unlimited
   };
@@ -37,6 +38,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limits: {
       applicationsPerWeek: 3,
+      applicationsPerDay: 1,
       cvGeneration: 5,
       historyDays: 7,
     },
@@ -59,6 +61,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limits: {
       applicationsPerWeek: 10,
+      applicationsPerDay: 5,
       cvGeneration: -1,
       historyDays: -1,
     },
@@ -83,6 +86,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limits: {
       applicationsPerWeek: -1,
+      applicationsPerDay: 20,
       cvGeneration: -1,
       historyDays: -1,
     },
@@ -100,8 +104,10 @@ export interface Subscription {
 
 export interface Usage {
   applicationsThisWeek: number;
+  applicationsToday: number;
   cvGenerated: number;
   weekStartDate: string;
+  dayStartDate: string;
   totalApplications: number;
 }
 
@@ -244,28 +250,33 @@ interface AppState {
 
   // Experiences
   experiences: Experience[];
+  setExperiences: (exps: Experience[]) => void;
   addExperience: (exp: Experience) => void;
   updateExperience: (id: string, exp: Partial<Experience>) => void;
   removeExperience: (id: string) => void;
 
   // Educations
   educations: Education[];
+  setEducations: (edus: Education[]) => void;
   addEducation: (edu: Education) => void;
   updateEducation: (id: string, edu: Partial<Education>) => void;
   removeEducation: (id: string) => void;
 
   // Certifications
   certifications: Certification[];
+  setCertifications: (certs: Certification[]) => void;
   addCertification: (cert: Certification) => void;
   removeCertification: (id: string) => void;
 
   // Languages
   languages: Language[];
+  setLanguages: (langs: Language[]) => void;
   addLanguage: (lang: Language) => void;
   removeLanguage: (id: string) => void;
 
   // Skills
   skills: Skill[];
+  setSkills: (skills: Skill[]) => void;
   addSkill: (skill: Skill) => void;
   removeSkill: (id: string) => void;
 
@@ -383,6 +394,7 @@ export const useAppStore = create<AppState>()(
       setProfile: (profile) => set((state) => ({ profile: { ...state.profile, ...profile } })),
 
       experiences: [],
+      setExperiences: (exps) => set({ experiences: exps }),
       addExperience: (exp) => set((state) => ({ experiences: [...state.experiences, exp] })),
       updateExperience: (id, exp) => set((state) => ({
         experiences: state.experiences.map((e) => e.id === id ? { ...e, ...exp } : e)
@@ -392,6 +404,7 @@ export const useAppStore = create<AppState>()(
       })),
 
       educations: [],
+      setEducations: (edus) => set({ educations: edus }),
       addEducation: (edu) => set((state) => ({ educations: [...state.educations, edu] })),
       updateEducation: (id, edu) => set((state) => ({
         educations: state.educations.map((e) => e.id === id ? { ...e, ...edu } : e)
@@ -401,18 +414,21 @@ export const useAppStore = create<AppState>()(
       })),
 
       certifications: [],
+      setCertifications: (certs) => set({ certifications: certs }),
       addCertification: (cert) => set((state) => ({ certifications: [...state.certifications, cert] })),
       removeCertification: (id) => set((state) => ({
         certifications: state.certifications.filter((c) => c.id !== id)
       })),
 
       languages: [],
+      setLanguages: (langs) => set({ languages: langs }),
       addLanguage: (lang) => set((state) => ({ languages: [...state.languages, lang] })),
       removeLanguage: (id) => set((state) => ({
         languages: state.languages.filter((l) => l.id !== id)
       })),
 
       skills: [],
+      setSkills: (skills) => set({ skills }),
       addSkill: (skill) => set((state) => ({ skills: [...state.skills, skill] })),
       removeSkill: (id) => set((state) => ({
         skills: state.skills.filter((s) => s.id !== id)
@@ -503,8 +519,10 @@ export const useAppStore = create<AppState>()(
       // Usage & Quotas
       usage: {
         applicationsThisWeek: 0,
+        applicationsToday: 0,
         cvGenerated: 0,
         weekStartDate: getStartOfWeek(),
+        dayStartDate: new Date().toISOString().split('T')[0],
         totalApplications: 0,
       },
 
@@ -512,10 +530,17 @@ export const useAppStore = create<AppState>()(
         const state = get();
         if (!state.canApply()) return false;
 
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+        const currentWeekStart = getStartOfWeek();
+
         set((s) => ({
           usage: {
             ...s.usage,
-            applicationsThisWeek: s.usage.applicationsThisWeek + 1,
+            applicationsThisWeek: (s.usage.weekStartDate === currentWeekStart ? s.usage.applicationsThisWeek : 0) + 1,
+            applicationsToday: (s.usage.dayStartDate === todayStr ? s.usage.applicationsToday : 0) + 1,
+            weekStartDate: currentWeekStart,
+            dayStartDate: todayStr,
             totalApplications: s.usage.totalApplications + 1,
           }
         }));
@@ -549,18 +574,35 @@ export const useAppStore = create<AppState>()(
         const planLimits = SUBSCRIPTION_PLANS.find(p => p.id === plan)?.limits;
         if (!planLimits) return false;
 
-        // Check if week has changed
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
         const currentWeekStart = getStartOfWeek();
+
+        // Check if day has changed
+        if (state.usage.dayStartDate !== todayStr) {
+          set((s) => ({
+            usage: { ...s.usage, applicationsToday: 0, dayStartDate: todayStr }
+          }));
+        }
+
+        // Check if week has changed
         if (state.usage.weekStartDate !== currentWeekStart) {
           set((s) => ({
             usage: { ...s.usage, applicationsThisWeek: 0, weekStartDate: currentWeekStart }
           }));
         }
 
-        // Unlimited
-        if (planLimits.applicationsPerWeek === -1) return true;
+        // Daily limit check
+        if (planLimits.applicationsPerDay !== -1 && state.usage.applicationsToday >= planLimits.applicationsPerDay) {
+          return false;
+        }
 
-        return state.usage.applicationsThisWeek < planLimits.applicationsPerWeek;
+        // Weekly limit check
+        if (planLimits.applicationsPerWeek !== -1 && state.usage.applicationsThisWeek >= planLimits.applicationsPerWeek) {
+          return false;
+        }
+
+        return true;
       },
 
       canGenerateCV: () => {
@@ -581,10 +623,11 @@ export const useAppStore = create<AppState>()(
         const planLimits = SUBSCRIPTION_PLANS.find(p => p.id === plan)?.limits;
         if (!planLimits) return 0;
 
-        // Unlimited
-        if (planLimits.applicationsPerWeek === -1) return -1;
+        const dayRemaining = planLimits.applicationsPerDay === -1 ? Infinity : Math.max(0, planLimits.applicationsPerDay - state.usage.applicationsToday);
+        const weekRemaining = planLimits.applicationsPerWeek === -1 ? Infinity : Math.max(0, planLimits.applicationsPerWeek - state.usage.applicationsThisWeek);
 
-        return Math.max(0, planLimits.applicationsPerWeek - state.usage.applicationsThisWeek);
+        const remaining = Math.min(dayRemaining, weekRemaining);
+        return remaining === Infinity ? -1 : remaining;
       },
 
       // Payment History

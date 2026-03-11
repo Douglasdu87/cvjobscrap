@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import { db } from "@/lib/db";
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '';
 const JSEARCH_HOST = 'jsearch.p.rapidapi.com';
@@ -8,6 +11,11 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const groq = new Groq({ apiKey: GROQ_API_KEY });
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+  }
+
   const body = await request.json();
   const { action = 'apply', profile, skills, experiences, preferences, selectedJobs, maxApplications = 5 } = body;
 
@@ -16,7 +24,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // MODE: SEARCH
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+      include: { subscription: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'Utilisateur non trouvé' }, { status: 404 });
+    }
+
+    // MODE: SEARCH (No strict limits on search)
     if (action === 'search') {
       let baseQuery = preferences?.keywords?.join(' ') || profile?.targetJobTitle || 'developer';
       let queryString = baseQuery;
@@ -65,6 +82,28 @@ export async function POST(request: NextRequest) {
     if (action === 'apply') {
       if (!selectedJobs || selectedJobs.length === 0) {
         return NextResponse.json({ error: 'No jobs selected' }, { status: 400 });
+      }
+
+      // Enforcement of Daily Limits
+      const plan = user.subscription?.plan || 'starter';
+      const limits: Record<string, number> = { 'starter': 1, 'pro': 5, 'elite': 20 };
+      const dailyLimit = limits[plan] || 1;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const countToday = await db.application.count({
+        where: {
+          userId: user.id,
+          createdAt: { gte: today }
+        }
+      });
+
+      if (countToday + selectedJobs.length > dailyLimit) {
+        return NextResponse.json({ 
+          success: false, 
+          error: `Quota dépassé. Limite : ${dailyLimit} par jour pour votre plan ${plan.toUpperCase()}.` 
+        }, { status: 403 });
       }
 
       const applications = await Promise.all(selectedJobs.map(async (job: any) => {

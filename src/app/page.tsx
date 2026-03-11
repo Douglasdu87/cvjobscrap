@@ -27,8 +27,10 @@ import {
   Upload, FileUp, Play, Pause, Filter, Wand2, ExternalLink,
   Mail, Phone
 } from 'lucide-react';
-import Image from 'next/image';
 import { toast } from '@/hooks/use-toast';
+import { useSession, signOut } from 'next-auth/react';
+import { LoginModal, RegisterModal } from '@/components/AuthModals';
+import NextImage from 'next/image';
 
 // ============================================
 // PAYMENT DIALOG COMPONENT (defined first to avoid hoisting issues)
@@ -674,10 +676,40 @@ function CVModalPreview({ cvDataJson, primaryColor, template, children }: { cvDa
 // ============================================
 export default function App() {
   const { currentView, setCurrentView } = useAppStore();
+  const { data: session } = useSession();
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const { setProfile, setExperiences, setEducations, setSkills, setLanguages, setCertifications } = useAppStore();
+
+  // Synchronize store with database when session changes
+  useEffect(() => {
+    const syncWithDB = async () => {
+      if (session?.user?.email) {
+        try {
+          const response = await fetch('/api/user/profile');
+          if (response.ok) {
+            const data = await response.json();
+            if (data.profile) setProfile(data.profile);
+            if (data.experiences) setExperiences(data.experiences);
+            if (data.educations) setEducations(data.educations);
+            if (data.skills) setSkills(data.skills);
+            if (data.languages) setLanguages(data.languages);
+            if (data.certifications) setCertifications(data.certifications);
+          }
+        } catch (error) {
+          console.error("Sync error:", error);
+        }
+      }
+    };
+    syncWithDB();
+  }, [session, setProfile, setExperiences, setEducations, setSkills, setLanguages, setCertifications]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <Header />
+      <Header 
+        onLoginClick={() => setIsLoginModalOpen(true)}
+        onRegisterClick={() => setIsRegisterModalOpen(true)}
+      />
       <main className="flex-1">
         {currentView === 'home' && <HomePage />}
         {currentView === 'cv-builder' && <CVBuilderPage />}
@@ -688,15 +720,34 @@ export default function App() {
         {currentView === 'import-cv' && <ImportCVPage />}
       </main>
       <Footer />
+
+      <LoginModal 
+        isOpen={isLoginModalOpen} 
+        onClose={() => setIsLoginModalOpen(false)} 
+        onSwitchToRegister={() => {
+          setIsLoginModalOpen(false);
+          setIsRegisterModalOpen(true);
+        }}
+      />
+      <RegisterModal 
+        isOpen={isRegisterModalOpen} 
+        onClose={() => setIsRegisterModalOpen(false)} 
+        onSwitchToLogin={() => {
+          setIsRegisterModalOpen(false);
+          setIsLoginModalOpen(true);
+        }}
+      />
     </div>
   );
 }
 
+
 // ============================================
 // HEADER COMPONENT
 // ============================================
-function Header() {
+function Header({ onLoginClick, onRegisterClick }: { onLoginClick: () => void, onRegisterClick: () => void }) {
   const { currentView, setCurrentView, subscription, getRemainingApplications } = useAppStore();
+  const { data: session } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const remaining = getRemainingApplications();
 
@@ -714,7 +765,7 @@ function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => setCurrentView('home')}>
-          <Image src="/logo.png" alt="CVJobScrap" width={40} height={40} className="h-10 w-auto" />
+          <NextImage src="/logo.png" alt="CVJobScrap" width={40} height={40} className="h-10 w-auto" />
           <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">CVJobScrap</span>
         </div>
 
@@ -733,8 +784,25 @@ function Header() {
               {remaining >= 0 && <span className="ml-1">• {remaining} candidatures</span>}
             </Badge>
           )}
+          
           <Button variant="ghost" size="sm"><Bell className="h-4 w-4" /></Button>
-          <Button size="sm" onClick={() => setCurrentView('dashboard')} className="gradient-primary text-white gap-2"><User className="h-4 w-4" />Compte</Button>
+          
+          {session ? (
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => setCurrentView('dashboard')} className="gradient-primary text-white gap-2">
+                <User className="h-4 w-4" />
+                {session.user?.name || 'Mon Compte'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => signOut()}>
+                <XCircle className="h-4 w-4 text-zinc-400 hover:text-red-500 transition-colors" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={onLoginClick}>Se connecter</Button>
+              <Button size="sm" onClick={onRegisterClick} className="gradient-primary text-white">S'inscrire</Button>
+            </div>
+          )}
         </div>
 
         <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
@@ -2206,6 +2274,7 @@ function JobSearchPage() {
 // DASHBOARD PAGE
 // ============================================
 function DashboardPage() {
+  const { data: session } = useSession();
   const { applications, subscription, profile, cvScore, getRemainingApplications, cancelSubscription, setCurrentView, updateApplicationStatus } = useAppStore();
   const planName = subscription?.plan?.toUpperCase() || 'STARTER';
   const remaining = getRemainingApplications();
@@ -2401,8 +2470,76 @@ function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Subscription */}
+        {/* Account Management & Subscription */}
         <div className="space-y-6">
+          {/* Account Management */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Paramètres du compte
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="acc-name">Nom complet</Label>
+                <Input 
+                  id="acc-name" 
+                  defaultValue={session?.user?.name || ''} 
+                  placeholder="Jean Dupont"
+                  onChange={(e) => {
+                    // This would ideally call an update API
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="acc-email">Email</Label>
+                <Input 
+                  id="acc-email" 
+                  defaultValue={session?.user?.email || ''} 
+                  disabled 
+                  className="bg-muted"
+                />
+              </div>
+              <Button 
+                className="w-full" 
+                variant="outline"
+                onClick={async () => {
+                  const state = useAppStore.getState();
+                  try {
+                    const res = await fetch('/api/user/profile', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ 
+                        profile: state.profile,
+                        experiences: state.experiences,
+                        educations: state.educations,
+                        skills: state.skills,
+                        languages: state.languages,
+                        certifications: state.certifications
+                      })
+                    });
+                    if (res.ok) {
+                      toast({ title: "Synchronisation réussie", description: "Toutes vos données ont été sauvegardées sur votre compte." });
+                    }
+                  } catch (e) {
+                    toast({ title: "Erreur", description: "Impossible de synchroniser les données.", variant: "destructive" });
+                  }
+                }}
+              >
+                Sauvegarder tout sur mon compte
+              </Button>
+              <Separator />
+              <Button 
+                variant="destructive" 
+                className="w-full gap-2" 
+                onClick={() => signOut({ callbackUrl: '/' })}
+              >
+                <XCircle className="h-4 w-4" /> Déconnexion
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5" />Abonnement</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -2824,6 +2961,7 @@ function AutoApplyPage() {
     autoApply, setAutoApply, 
     frequency, setFrequency, 
     addApplication, subscription,
+    usage, incrementApplications, getRemainingApplications,
     searchingJobs, setSearchingJobs,
     selectedJobIds, setSelectedJobIds,
     toggleJobSelection
@@ -2868,6 +3006,15 @@ function AutoApplyPage() {
       return;
     }
 
+    if (selectedJobIds.length > getRemainingApplications() && getRemainingApplications() !== -1) {
+      toast({ 
+        title: 'Quota atteint', 
+        description: `Vous ne pouvez postuler qu'à ${getRemainingApplications()} offre(s) supplémentaire(s) aujourd'hui.`, 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     setIsApplying(true);
     const selectedJobs = searchingJobs.filter(job => selectedJobIds.includes(job.id));
 
@@ -2892,16 +3039,31 @@ function AutoApplyPage() {
             ...app,
             appliedVia: 'ai'
           });
+          incrementApplications();
         });
 
         setApplicationsToday(prev => prev + data.applications.length);
         setLastRun(new Date().toISOString());
         setSearchingJobs([]); // Clear search after apply
         setSelectedJobIds([]);
+
+        // Send Email Summary
+        try {
+          fetch('/api/notifications/summary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applications: data.applications }),
+          });
+        } catch (e) {
+          console.error("Failed to send summary email", e);
+        }
+
         toast({ 
           title: '🚀 Succès !', 
-          description: `${data.applications.length} candidatures IA préparées et ajoutées à votre dashboard.` 
+          description: `${data.applications.length} candidatures IA préparées. Un récapitulatif a été envoyé sur votre e-mail.` 
         });
+      } else {
+        toast({ title: 'Erreur', description: data.error || 'Échec de la génération des candidatures.', variant: 'destructive' });
       }
     } catch {
       toast({ title: 'Erreur', description: 'Échec de la génération des candidatures.', variant: 'destructive' });
@@ -2943,12 +3105,12 @@ function AutoApplyPage() {
             <CardContent className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="text-center p-3 bg-background border rounded-lg shadow-sm">
-                  <div className="text-xl font-bold text-primary">{applicationsToday}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Aujourd'hui</div>
+                  <div className="text-xl font-bold text-primary">{getRemainingApplications() === -1 ? '∞' : getRemainingApplications()}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Restant / jour</div>
                 </div>
                 <div className="text-center p-3 bg-background border rounded-lg shadow-sm">
-                  <div className="text-xl font-bold text-primary">{jobPreferences.maxApplicationsPerDay}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Limite / jour</div>
+                  <div className="text-xl font-bold text-primary">{usage.applicationsToday}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Aujourd'hui</div>
                 </div>
                 <div className="text-center p-3 bg-background border rounded-lg shadow-sm hidden md:block">
                   <div className="text-xl font-bold text-primary">{lastRun ? new Date(lastRun).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}</div>
@@ -3184,7 +3346,7 @@ function Footer() {
         <div className="grid md:grid-cols-4 gap-8">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <Image src="/logo.png" alt="CVJobScrap" width={32} height={32} className="h-8 w-auto" />
+              <NextImage src="/logo.png" alt="CVJobScrap" width={32} height={32} className="h-8 w-auto" />
               <span className="text-lg font-bold">CVJobScrap</span>
             </div>
             <p className="text-muted-foreground text-sm max-w-md">Votre partenaire IA pour une recherche d'emploi optimisée.</p>
