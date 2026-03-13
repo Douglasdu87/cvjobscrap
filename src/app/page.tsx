@@ -303,9 +303,9 @@ function ApplyWizard({ job, onClose, onSubmit }: { job: any; onClose: () => void
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#f3f2f1]">
-      {/* Header */}
-      <div className="bg-white border-b">
+    <div className="fixed inset-0 z-50 bg-[#f3f2f1] flex flex-col">
+      {/* Header — reste fixe en haut */}
+      <div className="bg-white border-b shrink-0">
         <div className="container mx-auto max-w-7xl px-4 flex items-center justify-between h-14">
           <div className="flex items-center gap-4">
             <button onClick={onClose} className="text-gray-500 hover:text-gray-800 transition-colors">
@@ -319,9 +319,10 @@ function ApplyWizard({ job, onClose, onSubmit }: { job: any; onClose: () => void
         </div>
       </div>
 
-      {/* Content */}
-      <div className="container mx-auto max-w-6xl px-4 py-8">
-        <div className="lg:grid lg:grid-cols-[1fr_380px] gap-8">
+      {/* Content — scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="container mx-auto max-w-6xl px-4 py-8">
+          <div className="lg:grid lg:grid-cols-[1fr_380px] gap-8">
           {/* Left - Form */}
           <div className="bg-white rounded-lg border shadow-sm p-8 mb-6 lg:mb-0">
             {/* Progress Bar */}
@@ -647,6 +648,7 @@ function ApplyWizard({ job, onClose, onSubmit }: { job: any; onClose: () => void
           </div>
         </div>
       </div>
+      </div>{/* end overflow-y-auto */}
     </div>
   );
 }
@@ -764,9 +766,9 @@ function Header({ onLoginClick, onRegisterClick }: { onLoginClick: () => void, o
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setCurrentView('home')}>
+        <div className="flex items-center gap-2 cursor-pointer shrink-0 mr-4" onClick={() => setCurrentView('home')}>
           <NextImage src="/logo.png" alt="CVJobScrap" width={40} height={40} className="h-10 w-auto" />
-          <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">CVJobScrap</span>
+          <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent whitespace-nowrap">CVJobScrap</span>
         </div>
 
         <nav className="hidden md:flex items-center gap-1">
@@ -2353,6 +2355,83 @@ function DashboardPage() {
         <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center"><Calendar className="h-5 w-5 text-green-500" /></div><div><div className="text-2xl font-bold">{stats.interviews}</div><div className="text-sm text-muted-foreground">Entretiens</div></div></div></CardContent></Card>
       </div>
 
+      {/* ─── Comment fonctionne Auto-Apply ─── */}
+      {(() => {
+        const aiApps = applications.filter(a => a.appliedVia === 'ai');
+        const todayAiApps = aiApps.filter(a => {
+          if (!a.sentAt) return false;
+          const d = new Date(a.sentAt);
+          const now = new Date();
+          return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+        });
+        const steps = [
+          { icon: Search, color: 'text-blue-500', bg: 'bg-blue-500/10', label: 'Recherche IA', desc: 'L\'agent scanne les offres en temps réel selon vos critères' },
+          { icon: Sparkles, color: 'text-purple-500', bg: 'bg-purple-500/10', label: 'Génération LM', desc: 'Une lettre de motivation unique est rédigée par l\'IA pour chaque offre' },
+          { icon: Send, color: 'text-primary', bg: 'bg-primary/10', label: 'Candidature préparée', desc: 'Votre profil et votre lettre sont prêts, enregistrés dans votre tableau de bord' },
+          { icon: Mail, color: 'text-green-500', bg: 'bg-green-500/10', label: 'Récapitulatif email', desc: 'Un e-mail de confirmation vous est envoyé avec la liste des offres traitées' },
+        ];
+        return (
+          <Card className="mb-8 border-primary/20 bg-gradient-to-br from-background to-primary/5 overflow-hidden">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Rocket className="h-5 w-5 text-primary" />
+                  <span>Comment votre Agent IA postule pour vous</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {todayAiApps.length > 0 && (
+                    <Badge className="bg-green-500/15 text-green-600 border-green-500/30 gap-1.5 animate-pulse">
+                      <Zap className="h-3 w-3" />
+                      {todayAiApps.length} envoyée{todayAiApps.length > 1 ? 's' : ''} aujourd'hui
+                    </Badge>
+                  )}
+                  {aiApps.length > 0 && (
+                    <Badge variant="secondary" className="gap-1.5">
+                      <BarChart3 className="h-3 w-3" />
+                      {aiApps.length} au total
+                    </Badge>
+                  )}
+                </div>
+              </CardTitle>
+              <CardDescription>Processus entièrement automatisé — transparent et sécurisé</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="relative grid grid-cols-2 md:grid-cols-4 gap-4">
+                {steps.map((step, i) => {
+                  const Icon = step.icon;
+                  return (
+                    <div key={i} className="relative flex flex-col items-center text-center gap-3 p-4 rounded-xl border bg-background/80 hover:border-primary/40 transition-all group">
+                      {/* Connector line */}
+                      {i < steps.length - 1 && (
+                        <div className="absolute right-0 top-10 w-4 h-0.5 bg-border translate-x-full hidden md:block z-10" />
+                      )}
+                      {/* Step number */}
+                      <div className="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                        {i + 1}
+                      </div>
+                      <div className={`w-12 h-12 rounded-xl ${step.bg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                        <Icon className={`h-6 w-6 ${step.color}`} />
+                      </div>
+                      <div>
+                        <p className={`font-semibold text-sm ${step.color}`}>{step.label}</p>
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{step.desc}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {aiApps.length === 0 && (
+                <div className="mt-4 p-3 rounded-lg bg-muted/50 border border-dashed text-center text-sm text-muted-foreground">
+                  <Zap className="h-4 w-4 inline-block mr-1 opacity-50" />
+                  Aucune candidature IA encore — lancez votre premier <button className="text-primary font-medium hover:underline" onClick={() => setCurrentView('auto-apply')}>Auto-Apply</button> !
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Applications */}
         <Card className="lg:col-span-2">
@@ -3047,15 +3126,22 @@ function AutoApplyPage() {
         setSearchingJobs([]); // Clear search after apply
         setSelectedJobIds([]);
 
-        // Send Email Summary
+        // Send Email Summary (await to surface errors + credentials for auth session)
         try {
-          fetch('/api/notifications/summary', {
+          const notifRes = await fetch('/api/notifications/summary', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include', // ← CRITICAL: sends the NextAuth session cookie
             body: JSON.stringify({ applications: data.applications }),
           });
+          if (!notifRes.ok) {
+            const errBody = await notifRes.text();
+            console.error(`[Email] Notification API error ${notifRes.status}:`, errBody);
+          } else {
+            console.log('[Email] Summary notification sent successfully');
+          }
         } catch (e) {
-          console.error("Failed to send summary email", e);
+          console.error('[Email] Failed to send summary email:', e);
         }
 
         toast({ 
@@ -3105,11 +3191,11 @@ function AutoApplyPage() {
             <CardContent className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="text-center p-3 bg-background border rounded-lg shadow-sm">
-                  <div className="text-xl font-bold text-primary">{getRemainingApplications() === -1 ? '∞' : getRemainingApplications()}</div>
+                  <div className="text-xl font-bold text-primary">{getRemainingApplications() === -1 ? '∞' : String(getRemainingApplications() || 0)}</div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Restant / jour</div>
                 </div>
                 <div className="text-center p-3 bg-background border rounded-lg shadow-sm">
-                  <div className="text-xl font-bold text-primary">{usage.applicationsToday}</div>
+                  <div className="text-xl font-bold text-primary">{String(usage?.applicationsToday || 0)}</div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Aujourd'hui</div>
                 </div>
                 <div className="text-center p-3 bg-background border rounded-lg shadow-sm hidden md:block">

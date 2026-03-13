@@ -86,8 +86,9 @@ export async function POST(request: NextRequest) {
 
       // Enforcement of Daily Limits
       const plan = user.subscription?.plan || 'starter';
-      const limits: Record<string, number> = { 'starter': 1, 'pro': 5, 'elite': 20 };
-      const dailyLimit = limits[plan] || 1;
+      // Generous limits: Starter 10/day, Pro 20/day, Elite 50/day
+      const limits: Record<string, number> = { 'starter': 10, 'pro': 20, 'elite': 50 };
+      const dailyLimit = limits[plan] ?? 10;
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -99,14 +100,17 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      if (countToday + selectedJobs.length > dailyLimit) {
+      const remaining = dailyLimit - countToday;
+      const toApply = selectedJobs.slice(0, remaining); // apply only as many as allowed
+
+      if (toApply.length === 0) {
         return NextResponse.json({ 
           success: false, 
-          error: `Quota dépassé. Limite : ${dailyLimit} par jour pour votre plan ${plan.toUpperCase()}.` 
+          error: `Quota journalier atteint (${dailyLimit}/jour pour le plan ${plan.toUpperCase()}). Revenez demain !` 
         }, { status: 403 });
       }
 
-      const applications = await Promise.all(selectedJobs.map(async (job: any) => {
+      const applications = await Promise.all(toApply.map(async (job: any) => {
         // AI Tailored Cover Letter
         const prompt = `Tu es un expert en recrutement. Rédige une lettre de motivation percutante et personnalisée pour le poste suivant :
         
@@ -140,21 +144,57 @@ export async function POST(request: NextRequest) {
           coverLetter = `Madame, Monsieur,\n\nPassionné par le secteur du développement, c'est avec un grand intérêt que je postule au poste de ${job.title} chez ${job.company}. Mon profil de ${profile.targetJobTitle} correspond aux attentes de votre équipe.\n\nCordialement,\n${profile.firstName} ${profile.lastName}`;
         }
 
+        // Persist JobOffer + Application in DB
+        const now = new Date();
+        let jobOffer;
+        try {
+          jobOffer = await db.jobOffer.create({
+            data: {
+              title: job.title,
+              company: job.company,
+              location: job.location || null,
+              description: job.description?.substring(0, 5000) || '',
+              sourceUrl: job.url || job.sourceUrl || null,
+              source: 'auto-apply',
+              publishedAt: now,
+            }
+          });
+        } catch (dbErr) {
+          console.error('JobOffer create error (non-fatal):', dbErr);
+        }
+
+        let savedApp;
+        try {
+          savedApp = await db.application.create({
+            data: {
+              userId: user.id,
+              jobId: jobOffer?.id || null,
+              status: 'sent',
+              coverLetter,
+              sentAt: now,
+            }
+          });
+        } catch (dbErr) {
+          console.error('Application create error (non-fatal):', dbErr);
+        }
+
         return {
-          id: crypto.randomUUID(),
-          jobId: job.id,
+          id: savedApp?.id || crypto.randomUUID(),
+          jobId: jobOffer?.id || job.id,
           jobTitle: job.title,
           company: job.company,
           status: 'sent',
           coverLetter,
-          sourceUrl: job.url,
-          sentAt: new Date().toISOString()
+          sourceUrl: job.url || job.sourceUrl,
+          sentAt: now.toISOString(),
+          appliedVia: 'ai',
         };
       }));
 
       return NextResponse.json({
         success: true,
-        applications
+        applications,
+        remaining: remaining - applications.length,
       });
     }
 
